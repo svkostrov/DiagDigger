@@ -9,7 +9,7 @@ const plural = (count, one, few, many) => count % 10 === 1 && count % 100 !== 11
 const NAV_GROUPS = [
   { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
   { title: "Интернет", icon: "◎", categories: ["internet", "vpn"] },
-  { title: "Мои сети и Wi‑Fi", icon: "⌁", categories: ["interfaces", "wifi", "dhcp"] },
+  { title: "Мои сети и Wi‑Fi", icon: "⌁", categories: ["interfaces", "wifi", "mws", "dhcp"] },
   { title: "Сетевые правила", icon: "⬡", categories: ["routing", "security"] },
   { title: "Управление", icon: "⚙", categories: ["configuration", "services", "logs", "other"] },
 ];
@@ -102,9 +102,9 @@ function renderExplore() {
     <div class="view-head">
       <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h2>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h2><p>${escapeHtml(file.filename)}</p></div>
       <div class="meta-grid">
-        <div><span>Устройство</span><b>${escapeHtml(file.meta.device)}</b></div><div><span>Версия образа</span><b>${escapeHtml(file.meta.version)}</b></div>
+        <div><span>Устройство · HW ID</span><b>${escapeHtml(file.meta.device)} · ${escapeHtml(file.meta.hwId)}</b></div>
         <div><span>Прошивка</span><b>${escapeHtml(file.meta.firmware)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
-        <div><span>HW ID</span><b>${escapeHtml(file.meta.hwId)}</b></div><div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
+        <div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
         <div><span>Релиз</span><b>${escapeHtml(file.meta.release)}</b></div><div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
         <div><span>NDM exact</span><b>${escapeHtml(file.meta.ndmExact)}</b><small>${escapeHtml(file.meta.ndmCdate)}</small></div><div><span>BSP exact</span><b>${escapeHtml(file.meta.bspExact)}</b><small>${escapeHtml(file.meta.bspCdate)}</small></div>
         ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(sensor.id)} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
@@ -152,10 +152,40 @@ function renderSectionButton(section) {
 }
 
 function renderSectionDetail(section) {
+  if (section.presentation === "associations") return renderAssociations(section);
   return `<div class="section-detail">
     <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h3>${escapeHtml(section.name)}</h3></div><button class="copy-button" id="copySection">Копировать</button></div>
     <pre class="code-view"><code>${highlight(section.content, state.query)}</code></pre>
   </div>`;
+}
+
+function xmlField(fragment, name) {
+  return fragment.match(new RegExp(`<${name}>\\s*([^<]*)\\s*<\\/${name}>`, "i"))?.[1]?.trim() || "—";
+}
+
+function formatTraffic(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) return "—";
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} КБ`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} МБ`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} ГБ`;
+}
+
+function formatUptime(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "—";
+  const days = Math.floor(seconds / 86400), hours = Math.floor(seconds % 86400 / 3600), minutes = Math.floor(seconds % 3600 / 60);
+  return [days && `${days} д`, hours && `${hours} ч`, `${minutes} мин`].filter(Boolean).join(" ");
+}
+
+function renderAssociations(section) {
+  const stations = [...section.content.matchAll(/<station>\s*([\s\S]*?)\s*<\/station>/gi)].map(match => match[1]);
+  return `<div class="section-detail wifi-associations"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>Wi‑Fi</span><h3>Подключённые устройства</h3></div><button class="copy-button" id="copySection">Копировать</button></div>
+    <p class="association-summary">${stations.length} ${plural(stations.length, "устройство", "устройства", "устройств")} подключено к точкам доступа.</p>
+    <div class="association-grid">${stations.map(station => {
+      const authenticated = xmlField(station, "authenticated") === "yes";
+      return `<article class="association-card"><div><code>${escapeHtml(xmlField(station, "mac"))}</code><span class="association-status ${authenticated ? "online" : "offline"}">${authenticated ? "Подключено" : "Не авторизовано"}</span></div><small>${escapeHtml(xmlField(station, "ap"))}</small><strong>${escapeHtml(xmlField(station, "rssi"))} dBm</strong><dl><div><dt>Скорость</dt><dd>↓ ${escapeHtml(xmlField(station, "rxrate"))} / ↑ ${escapeHtml(xmlField(station, "txrate"))} Мбит/с</dd></div><div><dt>Стандарт</dt><dd>${escapeHtml(xmlField(station, "mode"))} · ${escapeHtml(xmlField(station, "ht"))} МГц · MCS ${escapeHtml(xmlField(station, "mcs"))}</dd></div><div><dt>Трафик</dt><dd>↓ ${formatTraffic(xmlField(station, "rxbytes"))} / ↑ ${formatTraffic(xmlField(station, "txbytes"))}</dd></div><div><dt>В сети</dt><dd>${formatUptime(xmlField(station, "uptime"))}</dd></div><div><dt>Защита</dt><dd>${escapeHtml(xmlField(station, "security"))}</dd></div></dl></article>`;
+    }).join("") || `<div class="empty-results">Подключённых Wi‑Fi-устройств нет.</div>`}</div></div>`;
 }
 
 function highlight(text, query) {

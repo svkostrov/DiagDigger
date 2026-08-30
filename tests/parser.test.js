@@ -79,6 +79,34 @@ interface WifiMaster0/AccessPoint0
   assert.equal(searchDiagnostic(diagnostic, "WifiMaster").length, 3);
 });
 
+test("выделяет MWS, серверные конфигурации и show ip hotspot в свои разделы", () => {
+  const xml = `<selftest><file name="ndm:sharing-config"><![CDATA[service mws
+cifs
+    automount
+!
+interface Bridge0
+    l2tp-server interface Home
+    l2tp-server enable
+!
+mws wlan Home
+    band 0
+    ssid Mesh
+    enable
+!]]></file><!-- show ip hotspot --><hotspot><host>phone</host></hotspot><!-- show mws controller --><controller><state>up</state></controller></selftest>`;
+  const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml);
+  assert.ok(diagnostic.sections.some(section => section.category === "mws" && section.name.includes("MWS")));
+  assert.ok(diagnostic.sections.some(section => section.key === "derived:services:smb" && section.content.includes("automount")));
+  assert.ok(diagnostic.sections.some(section => section.key === "derived:services:l2tp" && section.content.includes("l2tp-server enable")));
+  assert.ok(diagnostic.sections.some(section => section.key === "derived:dhcp:show-ip-hotspot"));
+  assert.ok(diagnostic.sections.some(section => section.key === "derived:mws:show-mws-controller"));
+});
+
+test("show associations получает специальное представление", () => {
+  const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><!-- show associations --><station><mac>00:11:22:33:44:55</mac></station></selftest>`;
+  const section = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.find(item => item.key === "derived:wifi:show-associations");
+  assert.equal(section.presentation, "associations");
+});
+
 test("search returns every occurrence with file section and line location", () => {
   const text = `<selftest>\n<file name="ndm:test">\nSKUenable=0\nWifiMaster0 WifiMaster1\n</file>\n<interface name="WifiMaster0">\n<id>WifiMaster0</id>\n</interface>\n</selftest>`;
   const sku = searchDiagnostic(text, "SKU");

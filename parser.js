@@ -5,27 +5,29 @@ export const CATEGORY_INFO = {
   interfaces: { title: "Интерфейсы", icon: "⇆", order: 3 },
   internet: { title: "Интернет", icon: "◎", order: 4 },
   wifi: { title: "Wi‑Fi", icon: "⌁", order: 5 },
-  vpn: { title: "VPN и туннели", icon: "◇", order: 6 },
-  routing: { title: "Маршрутизация", icon: "↝", order: 7 },
-  dhcp: { title: "DHCP и DNS", icon: "≋", order: 8 },
-  security: { title: "Безопасность", icon: "⬡", order: 9 },
-  services: { title: "Сервисы", icon: "⚙", order: 10 },
-  logs: { title: "Логи", icon: "≡", order: 11 },
-  processes: { title: "Процессы и ядро", icon: "▦", order: 12 },
-  memory: { title: "Память", icon: "▤", order: 13 },
-  hardware: { title: "Оборудование", icon: "◆", order: 14 },
-  other: { title: "Прочее", icon: "•••", order: 15 },
+  mws: { title: "MWS", icon: "⌘", order: 6 },
+  vpn: { title: "VPN и туннели", icon: "◇", order: 7 },
+  routing: { title: "Маршрутизация", icon: "↝", order: 8 },
+  dhcp: { title: "DHCP и DNS", icon: "≋", order: 9 },
+  security: { title: "Безопасность", icon: "⬡", order: 10 },
+  services: { title: "Сервисы", icon: "⚙", order: 11 },
+  logs: { title: "Логи", icon: "≡", order: 12 },
+  processes: { title: "Процессы и ядро", icon: "▦", order: 13 },
+  memory: { title: "Память", icon: "▤", order: 14 },
+  hardware: { title: "Оборудование", icon: "◆", order: 15 },
+  other: { title: "Прочее", icon: "•••", order: 16 },
 };
 
 const CONFIG_GROUPS = [
-  ["wifi", "Wi‑Fi и точки доступа", /^(interface\s+Wifi|wifi|wlan|mws\s+wlan|access-point|mesh|roaming)/i],
+  ["mws", "MWS — модульная Wi‑Fi-система", /^mws\b/i],
+  ["wifi", "Wi‑Fi и точки доступа", /^(interface\s+Wifi|wifi|wlan|access-point|mesh|roaming)/i],
   ["vpn", "VPN и туннели", /^(interface\s+(Wireguard|OpenVPN|OpenConnect|IPsec|L2TP|PPTP|SSTP|GRE|EoIP|IPIP|Tunnel|ZeroTier)|crypto|ipsec|vpn-server|wireguard-server|oc-server|sstp-server)/i],
   ["internet", "Интернет-подключения", /^(interface\s+(PPPoE|UsbModem|UsbLte|UsbQmi|CdcEthernet|Yota)|pppoe|kabinet)/i],
   ["interfaces", "Интерфейсы и сегменты", /^(interface|port|switch|vlan|bridge|segment)/i],
   ["routing", "Маршруты, политики и NAT", /^(ip (route|policy|nat|static|conntrack)|ipv6 (route|static|local-prefix)|route|router|policy|nat|ppe)/i],
   ["dhcp", "DHCP, DNS и узлы", /^(ip dhcp|ip name-server|dns-proxy|nextdns|skydns|known host|host |ipv6 subnet|mdns)/i],
-  ["security", "Доступ и безопасность", /^(access|access-list|object-group|firewall|isolate-private|user|ntce|ip (hotspot|ssh|telnet|http security|http lockout)|cloud control)/i],
-  ["services", "Сервисы и приложения", /^(service|afp|cifs|dlna|dyndns|opkg|ntp|snmp|upnp|printer|torrent|udpxy|mws|easyconfig)/i],
+  ["security", "Доступ и безопасность", /^(access|access-list|object-group|firewall|isolate-private|user|ntce|ip (ssh|telnet|http security|http lockout)|cloud control)/i],
+  ["services", "Сервисы и приложения", /^(service|afp|cifs|dlna|dyndns|opkg|ntp|snmp|upnp|printer|torrent|udpxy|easyconfig)/i],
   ["system", "Система и компоненты", /^(system|hostname|domainname|administrator|clock|schedule|button|led|components)/i],
 ];
 
@@ -77,13 +79,15 @@ function extractShowSections(text) {
     ["show system", "show system", "system"],
     ["show system", "show system", "processes"],
     ["show system cpustat", "show system cpustat", "processes"],
-    ["show associations", "show association", "wifi"],
+    ["show associations", "Подключённые Wi‑Fi-устройства", "wifi", "associations"],
     ["show ip hotspot", "show ip hotspot", "dhcp"],
     ["show ip dhcp bindings", "show ip dhcp bindings", "dhcp"],
+    ["show mws associations", "MWS: подключения", "mws"],
+    ["show mws controller", "MWS: контроллер", "mws"],
   ];
-  return definitions.map(([command, name, category]) => {
+  return definitions.map(([command, name, category, presentation]) => {
     const content = extractShowOutput(text, command);
-    return content ? { key: `derived:${category}:${command.replaceAll(" ", "-")}`, name, category, content, virtual: true, source: "show" } : null;
+    return content ? { key: `derived:${category}:${command.replaceAll(" ", "-")}`, name, category, content, virtual: true, source: "show", presentation } : null;
   }).filter(Boolean);
 }
 
@@ -213,6 +217,7 @@ export function parseDiagnostic(filename, text) {
   const sections = raw.map(item => ({ key: `raw:${item.name}`, name: item.name, content: item.content, category: categoryFor(item.name), virtual: false }));
   sections.push({ key: "raw:selftest-structured", name: "Структурированные данные self-test", content: text, category: "other", virtual: false });
   sections.push(...splitConfig(config));
+  sections.push(...extractServiceConfigurations(config));
   sections.push(...extractShowSections(text));
   const temperatures = extractTemperatures(text);
   if (temperatures.length) sections.push({ key: "derived:temperatures", name: "Температура", category: "hardware", virtual: true, content: temperatures.map(sensor => `${sensor.id}: ${sensor.value} °C`).join("\n") });
@@ -223,6 +228,35 @@ export function parseDiagnostic(filename, text) {
     filename, size: new Blob([text]).size, text, meta, sections, semantic,
     lineCount: text.split(/\r?\n/).length,
   };
+}
+
+function splitConfigIntoBlocks(content) {
+  const blocks = [], current = [];
+  for (const line of content.split(/\r?\n/)) {
+    if (line && !/^\s/.test(line) && !line.startsWith("!")) {
+      if (current.length) blocks.push([...current]);
+      current.length = 0;
+    }
+    if (line || current.length) current.push(line);
+  }
+  if (current.length) blocks.push(current);
+  return blocks;
+}
+
+function extractServiceConfigurations(config) {
+  const definitions = [
+    ["smb", "Сервер SMB", /^cifs\b/im],
+    ["sstp", "VPN-сервер SSTP", /^sstp-server\b/im],
+    ["openconnect", "OpenConnect VPN-сервер", /^oc-server\b/im],
+    ["wireguard", "WireGuard VPN-сервер", /^wireguard-server\b/im],
+    ["l2tp", "VPN-сервер L2TP/IPsec", /^\s+l2tp-server\b/im],
+    ["ikev2", "VPN-сервер IKEv2/IPsec", /^crypto map VirtualIPServerIKE2\b/im],
+  ];
+  const blocks = splitConfigIntoBlocks(config);
+  return definitions.map(([key, name, re]) => {
+    const content = blocks.filter(block => re.test(block.join("\n"))).map(block => block.join("\n")).join("\n\n");
+    return content ? { key: `derived:services:${key}`, name, category: "services", content, virtual: true, source: "config" } : null;
+  }).filter(Boolean);
 }
 
 function interfaceBlocks(config) {
