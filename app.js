@@ -103,9 +103,9 @@ function renderExplore() {
       <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h2>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h2><p>${escapeHtml(file.filename)}</p></div>
       <div class="meta-grid">
         <div><span>Устройство · HW ID</span><b>${escapeHtml(file.meta.device)} · ${escapeHtml(file.meta.hwId)}</b></div>
-        <div><span>Прошивка</span><b>${escapeHtml(file.meta.firmware)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
+        <div><span>Прошивка · релиз</span><b>${escapeHtml(file.meta.firmware)} · ${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
         <div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
-        <div><span>Релиз</span><b>${escapeHtml(file.meta.release)}</b></div><div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
+        <div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
         <div><span>NDM exact</span><b>${escapeHtml(file.meta.ndmExact)}</b><small>${escapeHtml(file.meta.ndmCdate)}</small></div><div><span>BSP exact</span><b>${escapeHtml(file.meta.bspExact)}</b><small>${escapeHtml(file.meta.bspCdate)}</small></div>
         ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(sensor.id)} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
       </div>
