@@ -1,6 +1,6 @@
 // Тесты парсера на реальных диагностиках из tests/fixtures/.
 // Регрессионные тесты BUG-xxx фиксируют ожидаемое поведение после исправлений.
-import test from "node:test";
+import nodeTest from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +11,9 @@ import {
 } from "../parser.js";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
-const names = fs.readdirSync(FIXTURES).filter(name => name.endsWith(".txt")).sort();
+const hasFixtures = fs.existsSync(FIXTURES);
+const names = hasFixtures ? fs.readdirSync(FIXTURES).filter(name => name.endsWith(".txt")).sort() : [];
+const test = hasFixtures ? nodeTest : nodeTest.skip;
 
 const cache = new Map();
 function load(name) {

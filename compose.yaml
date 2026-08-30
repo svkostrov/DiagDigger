@@ -2,5 +2,5 @@ services:
   diagdigger:
     build: .
     ports:
-      - "8080:80"
+      - "4173:80"
     restart: unless-stopped
