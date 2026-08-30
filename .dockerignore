@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+npm-debug.log*
+tmp
+tests
+AGENTS.md
+bugfixed.md
+bugreport.md
+.env

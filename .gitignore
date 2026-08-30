@@ -1,0 +1,10 @@
+node_modules/
+tmp/playwright/
+tmp/screens/
+tmp/not-a-selftest.txt
+tmp/pdfs/
+tests/fixtures/
+AGENTS.md
+bugfixed.md
+bugreport.md
+.env

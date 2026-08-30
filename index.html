@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Локальный просмотр и сравнение диагностик Keenetic" />
+    <title>DiagDigger — разбор диагностик</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23079bd8'/%3E%3Cpath d='M17 16h15c11 0 18 6 18 16S43 48 32 48H17zm10 9v14h5c5 0 8-2 8-7s-3-7-8-7z' fill='white'/%3E%3C/svg%3E" />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("diagdigger-theme") || "auto";
+        const resolved = saved === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : saved;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themeMode = saved;
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./semantic.css" />
+    <link rel="stylesheet" href="./netcraze.css" />
+    <link rel="stylesheet" href="./themes.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="DiagDigger">
+        <span>DIAGDIGGER</span>
+        <small>SELF-TEST EXPLORER</small>
+      </a>
+      <div class="header-file-picker hidden" id="headerFilePicker"><span>Диагностика</span><select id="globalFileSelect"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
+      <div class="privacy"><span></span> Локальная обработка</div>
+      <div class="theme-control" role="group" aria-label="Тема оформления">
+        <button data-theme-choice="light" title="Светлая тема" aria-label="Светлая тема">☀</button>
+        <button data-theme-choice="auto" title="Системная тема" aria-label="Системная тема">A</button>
+        <button data-theme-choice="dark" title="Тёмная тема" aria-label="Тёмная тема">●</button>
+      </div>
+      <button class="button button-primary" id="headerUpload">Добавить файлы</button>
+    </header>
+
+    <main id="app">
+      <section class="hero" id="emptyState">
+        <div class="eyebrow">Keenetic self-test explorer</div>
+        <h1>Диагностика без поиска<br />по бесконечному файлу</h1>
+        <p>Загрузите один или несколько self-test файлов. DiagDigger разложит содержимое по категориям и покажет различия.</p>
+        <label class="dropzone" id="dropzone">
+          <input id="fileInput" type="file" accept=".txt,.xml,text/plain,application/xml" multiple />
+          <span class="upload-icon">↑</span>
+          <strong>Перетащите диагностики сюда</strong>
+          <span>или нажмите, чтобы выбрать файлы</span>
+          <small>TXT или XML · можно загрузить несколько сразу</small>
+        </label>
+        <div class="feature-row">
+          <div><b>01</b><span>Адаптивные категории</span></div>
+          <div><b>02</b><span>Поиск по всем данным</span></div>
+          <div><b>03</b><span>Сравнение секций</span></div>
+        </div>
+      </section>
+
+      <section class="workspace hidden" id="workspace">
+        <aside class="sidebar">
+          <div class="sidebar-head">
+            <span class="sidebar-label">Разделы</span>
+          </div>
+          <nav id="categoryNav" class="category-nav" aria-label="Категории диагностики"></nav>
+          <div class="sidebar-foot">
+            <button class="sidebar-upload" id="sideUpload"><span>＋</span> Добавить файлы</button>
+            <span class="local-note"><i class="privacy-dot"></i> Данные остаются локально</span>
+          </div>
+        </aside>
+
+        <div class="main-panel">
+          <nav class="tabs" aria-label="Режим просмотра">
+            <button class="tab active" data-tab="explore">Обзор</button>
+            <button class="tab" data-tab="compare">Сравнение <span id="compareBadge">0</span></button>
+          </nav>
+
+          <section id="exploreView" class="view"></section>
+          <section id="compareView" class="view hidden"></section>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast hidden" id="toast" role="status"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
