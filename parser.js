@@ -86,6 +86,15 @@ function temperatureDisplayName(id) {
   return ({ WifiMaster0: "Wi‑Fi 2,4 ГГц", WifiMaster1: "Wi‑Fi 5 ГГц" })[id] || id;
 }
 
+function isStructuredJson(content) {
+  try {
+    const value = JSON.parse(content);
+    return value !== null && typeof value === "object";
+  } catch {
+    return false;
+  }
+}
+
 function extractShowOutput(text, command) {
   const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll(" ", "\\s+");
   const match = text.match(new RegExp(`<!--\\s*${escaped}\\s*-->\\s*([\\s\\S]*?)(?=<!--|<\\/selftest>)`, "i"));
@@ -325,7 +334,10 @@ export function parseDiagnostic(filename, text) {
   sections.push(...splitConfig(config));
   sections.push(...extractServiceConfigurations(config));
   sections.push(...extractShowSections(text));
-  for (const section of sections) section.content = sanitizeRaw(section.content);
+  for (const section of sections) {
+    section.content = sanitizeRaw(section.content);
+    if (!section.presentation && isStructuredJson(section.content)) section.presentation = "json";
+  }
   const temperatures = extractTemperatures(text);
   if (temperatures.length) sections.push({ key: "derived:temperatures", name: "Температура", category: "hardware", virtual: true, content: temperatures.map(sensor => `${temperatureDisplayName(sensor.id)}: ${sensor.value} °C`).join("\n") });
   const meta = { ...fileMeta, ...getConfigMeta(config), ...getShowVersionMeta(text), firmware: fileMeta.version, temperatures, maxTemperature: temperatures.length ? Math.max(...temperatures.map(sensor => sensor.value)) : null };

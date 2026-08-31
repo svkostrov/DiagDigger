@@ -207,6 +207,29 @@ test("открытие секции и возврат к списку", async ({
   await expect(page.locator(".category-card").first()).toBeVisible();
 });
 
+test("массив однотипных JSON-объектов показывается таблицей с доступным исходником", async ({ page }) => {
+  await page.evaluate(() => {
+    const json = JSON.stringify([{ name: "wan0", state: "up", mtu: 1500 }, { name: "wan1", state: "down", mtu: 1492 }], null, 2);
+    const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><file name="sample.json"><![CDATA[${json}]]></file></selftest>`;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([xml], "self-test_KN-1_testing_1_router_now.txt", { type: "text/plain" }));
+    document.body.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true }));
+  });
+  await expect(page.locator("#workspace")).toBeVisible();
+  await page.click("[data-nav-category='other']");
+  await page.locator("[data-section-key='raw:sample.json']").click();
+  await expect(page.locator(".json-table thead")).toContainText("namestatemtu");
+  await expect(page.locator(".json-table tbody tr")).toHaveCount(2);
+  await expect(page.locator(".json-summary")).toContainText("Структурированное представление");
+  await expect(page.locator(".json-raw .code-view")).toBeHidden();
+  await page.locator(".json-raw > summary").click();
+  await expect(page.locator(".json-raw .code-view")).toContainText('"wan1"');
+  await expect(page.locator("#copySection")).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(321);
+  await expect(page.locator(".json-table")).toBeVisible();
+});
+
 test("«Ещё N» раскрывает полный список секций категории", async ({ page }) => {
   await upload(page, KN1811);
   await page.click("[data-nav-category='all']");

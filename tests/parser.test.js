@@ -109,6 +109,20 @@ test("show associations получает специальное представ
   assert.equal(section.presentation, "associations");
 });
 
+test("валидный JSON получает структурированное представление", () => {
+  const json = JSON.stringify([{ name: "wan0", state: "up", mtu: 1500 }, { name: "wan1", state: "down", mtu: 1492 }]);
+  const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><file name="sample.json"><![CDATA[${json}]]></file></selftest>`;
+  const section = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.find(item => item.name === "sample.json");
+  assert.equal(section.presentation, "json");
+  assert.equal(section.content, json);
+});
+
+test("похожий на JSON текст остаётся сырым", () => {
+  const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><file name="broken.json"><![CDATA[{not-json: true}]]></file></selftest>`;
+  const section = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.find(item => item.name === "broken.json");
+  assert.equal(section.presentation, undefined);
+});
+
 test("search returns every occurrence with file section and line location", () => {
   const text = `<selftest>\n<file name="ndm:test">\nSKUenable=0\nWifiMaster0 WifiMaster1\n</file>\n<interface name="WifiMaster0">\n<id>WifiMaster0</id>\n</interface>\n</selftest>`;
   const sku = searchDiagnostic(text, "SKU");

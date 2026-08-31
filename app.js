@@ -190,10 +190,54 @@ function renderSectionButton(section) {
 
 function renderSectionDetail(section) {
   if (section.presentation === "associations") return renderAssociations(section);
+  if (section.presentation === "json") return renderJsonSection(section);
   return `<div class="section-detail">
     <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
     <pre class="code-view" tabindex="0" role="region" aria-label="Содержимое секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre>
   </div>`;
+}
+
+const isJsonObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+
+function jsonScalar(value) {
+  if (value === null) return "—";
+  if (typeof value === "boolean") return value ? "Да" : "Нет";
+  return String(value);
+}
+
+function renderJsonComplexValue(value) {
+  const serialized = JSON.stringify(value, null, 2);
+  const summary = Array.isArray(value) ? `${value.length} ${plural(value.length, "элемент", "элемента", "элементов")}` : `${Object.keys(value).length} ${plural(Object.keys(value).length, "поле", "поля", "полей")}`;
+  return `<details class="json-cell-details"><summary>${summary}</summary><pre><code>${escapeHtml(serialized)}</code></pre></details>`;
+}
+
+function renderJsonTable(items, title = "Объекты") {
+  const columns = [...new Set(items.flatMap(item => Object.keys(item)))];
+  return `<section class="json-group json-collection"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${items.length} ${plural(items.length, "объект", "объекта", "объектов")}</span></div><div class="json-table-wrap"><table class="json-table"><thead><tr>${columns.map(column => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${items.map(item => `<tr>${columns.map(column => {
+    const value = item[column];
+    return `<td>${value !== null && typeof value === "object" ? renderJsonComplexValue(value) : `<code>${escapeHtml(value === undefined ? "—" : jsonScalar(value))}</code>`}</td>`;
+  }).join("")}</tr>`).join("")}</tbody></table></div></section>`;
+}
+
+function renderJsonArray(values, title) {
+  if (values.length && values.every(isJsonObject)) return renderJsonTable(values, title);
+  if (values.length <= 12 && values.every(value => value === null || typeof value !== "object")) {
+    return `<section class="json-group"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${values.length} ${plural(values.length, "значение", "значения", "значений")}</span></div><div class="json-values">${values.map(value => `<code>${escapeHtml(jsonScalar(value))}</code>`).join("") || `<span class="json-empty">Пустой массив</span>`}</div></section>`;
+  }
+  return `<section class="json-group"><div class="json-group-head"><h3>${escapeHtml(title)}</h3></div>${renderJsonComplexValue(values)}</section>`;
+}
+
+function renderJsonObject(object, title = "") {
+  const entries = Object.entries(object);
+  const scalarEntries = entries.filter(([, value]) => value === null || typeof value !== "object");
+  const complexEntries = entries.filter(([, value]) => value !== null && typeof value === "object");
+  return `<section class="json-group">${title ? `<div class="json-group-head"><h3>${escapeHtml(title)}</h3></div>` : ""}${scalarEntries.length ? `<dl class="json-fields">${scalarEntries.map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd><code>${escapeHtml(jsonScalar(value))}</code></dd></div>`).join("")}</dl>` : ""}${complexEntries.map(([key, value]) => Array.isArray(value) ? renderJsonArray(value, key) : renderJsonObject(value, key)).join("")}</section>`;
+}
+
+function renderJsonSection(section) {
+  const data = JSON.parse(section.content);
+  const visualization = Array.isArray(data) ? renderJsonArray(data, "Объекты") : renderJsonObject(data);
+  return `<div class="section-detail json-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление JSON</p>${visualization}<details class="json-raw"><summary>Исходный JSON</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный JSON секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
 }
 
 function xmlField(fragment, name) {
