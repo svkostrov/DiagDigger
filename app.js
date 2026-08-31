@@ -30,10 +30,16 @@ const NAV_GROUPS = [
 ];
 
 const themeMedia = matchMedia("(prefers-color-scheme: dark)");
-let themeMode = localStorage.getItem("diagdigger-theme") || "auto";
+function readStoredTheme() {
+  try { return localStorage.getItem("diagdigger-theme") || "auto"; } catch { return "auto"; }
+}
+function storeTheme(mode) {
+  try { localStorage.setItem("diagdigger-theme", mode); } catch {}
+}
+let themeMode = readStoredTheme();
 function applyTheme(mode) {
   themeMode = mode;
-  localStorage.setItem("diagdigger-theme", mode);
+  storeTheme(mode);
   document.documentElement.dataset.themeMode = mode;
   document.documentElement.dataset.theme = mode === "auto" ? (themeMedia.matches ? "dark" : "light") : mode;
   const select = $("#themeSelect");
@@ -45,12 +51,14 @@ applyTheme(themeMode);
 function toast(message, error = false, action = null) {
   const el = $("#toast");
   el.replaceChildren();
-  const text = document.createElement("span"); text.textContent = message; el.append(text);
+  const text = document.createElement("span"); text.textContent = message; text.setAttribute("role", error ? "alert" : "status"); text.setAttribute("aria-live", error ? "assertive" : "polite"); el.append(text);
   if (action) {
     const button = document.createElement("button"); button.type = "button"; button.textContent = action.label; button.addEventListener("click", action.callback, { once: true }); el.append(button);
+    requestAnimationFrame(() => button.focus());
   }
   el.classList.toggle("error", error); el.classList.remove("hidden");
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.add("hidden"), 3200);
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.add("hidden"), action ? 10_000 : 3200);
 }
 
 async function loadFiles(fileList) {
@@ -157,7 +165,7 @@ function renderExplore() {
     <div class="search-wrap"><span>⌕</span><input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Поиск по секциям и содержимому…" aria-label="Поиск по секциям и содержимому" />${state.query ? `<button class="search-clear" id="clearSearch" aria-label="Очистить поиск" title="Очистить поиск">×</button>` : `<kbd>${platformHint}</kbd>`}</div>
     ${selected ? renderSectionDetail(selected) : state.query.trim() ? renderSearchResults(file, state.query) : `
       <div class="category-grid ${state.activeCategory !== "all" ? "single" : ""}">
-        ${groups.map(([key, sections]) => renderCategory(key, sections, state.query, state.activeCategory !== "all")).join("") || `<div class="empty-results">Ничего не найдено. Попробуйте изменить запрос.</div>`}
+        ${groups.map(([key, sections]) => renderCategory(key, sections, state.query.trim(), state.activeCategory !== "all")).join("") || `<div class="empty-results">Ничего не найдено. Попробуйте изменить запрос.</div>`}
       </div>`}`;
 }
 
@@ -182,7 +190,7 @@ function renderSearchHit(hit, query) {
 
 function renderCategory(key, sections, query, expanded = false) {
   const info = CATEGORY_INFO[key];
-  const limit = expanded ? sections.length : query ? 30 : 7;
+  const limit = expanded ? sections.length : query.trim() ? 30 : 7;
   return `<article class="category-card">
     <div class="category-head"><span class="category-icon">${info.icon}</span><div><h2>${info.title}</h2><small>${sections.length} ${plural(sections.length, "секция", "секции", "секций")}</small></div></div>
     <div class="section-list">${sections.slice(0, limit).map(renderSectionButton).join("")}</div>
@@ -217,12 +225,12 @@ function jsonScalar(value) {
 function renderJsonComplexValue(value) {
   const serialized = JSON.stringify(value, null, 2);
   const summary = Array.isArray(value) ? `${value.length} ${plural(value.length, "элемент", "элемента", "элементов")}` : `${Object.keys(value).length} ${plural(Object.keys(value).length, "поле", "поля", "полей")}`;
-  return `<details class="json-cell-details"><summary>${summary}</summary><pre><code>${escapeHtml(serialized)}</code></pre></details>`;
+  return `<details class="json-cell-details"><summary>${summary}</summary><pre tabindex="0" role="region" aria-label="Раскрытое содержимое JSON"><code>${escapeHtml(serialized)}</code></pre></details>`;
 }
 
 function renderJsonTable(items, title = "Объекты") {
   const columns = [...new Set(items.flatMap(item => Object.keys(item)))];
-  return `<section class="json-group json-collection"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${items.length} ${plural(items.length, "объект", "объекта", "объектов")}</span></div><div class="json-table-wrap"><table class="json-table"><thead><tr>${columns.map(column => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${items.map(item => `<tr>${columns.map(column => {
+  return `<section class="json-group json-collection"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${items.length} ${plural(items.length, "объект", "объекта", "объектов")}</span></div><div class="json-table-wrap" tabindex="0" role="region" aria-label="Таблица ${escapeHtml(title)}"><table class="json-table"><thead><tr>${columns.map(column => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${items.map(item => `<tr>${columns.map(column => {
     const value = item[column];
     return `<td>${value !== null && typeof value === "object" ? renderJsonComplexValue(value) : `<code>${escapeHtml(value === undefined ? "—" : jsonScalar(value))}</code>`}</td>`;
   }).join("")}</tr>`).join("")}</tbody></table></div></section>`;
@@ -387,7 +395,7 @@ function renderSemanticDetail(item, left, right) {
   return `<div class="semantic-detail"><div class="detail-toolbar"><button class="back-button" id="backToCompare">← Все объекты</button><span class="semantic-icon">${item.icon}</span><div><span>${escapeHtml(item.category)}</span><h2>${escapeHtml(item.title)}</h2></div></div>
     <div class="semantic-device-head"><span>Параметр</span><b>${escapeHtml(left.meta.device)}<small>${escapeHtml(left.meta.model)}</small></b><b>${escapeHtml(right.meta.device)}<small>${escapeHtml(right.meta.model)}</small></b></div>
     <div class="field-comparison">${item.fields.map(field => `<div class="field-row ${field.changed ? "changed" : ""}"><span>${escapeHtml(field.name)}</span><code class="${!item.left ? "missing" : ""}">${escapeHtml(field.left)}</code><code class="${!item.right ? "missing" : ""}">${escapeHtml(field.right)}</code></div>`).join("")}</div>
-    <details class="raw-details"><summary>Показать исходную конфигурацию</summary><div><pre>${escapeHtml(item.left?.raw || "Объект отсутствует")}</pre><pre>${escapeHtml(item.right?.raw || "Объект отсутствует")}</pre></div></details>
+    <details class="raw-details"><summary>Показать исходную конфигурацию</summary><div><pre tabindex="0" role="region" aria-label="Исходная конфигурация слева">${escapeHtml(item.left?.raw || "Объект отсутствует")}</pre><pre tabindex="0" role="region" aria-label="Исходная конфигурация справа">${escapeHtml(item.right?.raw || "Объект отсутствует")}</pre></div></details>
   </div>`;
 }
 
@@ -420,6 +428,7 @@ function showAllCategory(key) {
 }
 
 document.addEventListener("click", event => {
+  const brand = event.target.closest("a.brand"); if (brand) { event.preventDefault(); state.tab = "explore"; state.activeCategory = "all"; state.activeSection = null; state.query = ""; $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); focusHeading(state.files.length ? "#exploreView h1" : "#emptyState h1"); return; }
   const upload = event.target.closest("#headerUpload,#sideUpload,#compareUpload"); if (upload) $("#fileInput").click();
   const tab = event.target.closest("[data-tab]"); if (tab) { state.tab = tab.dataset.tab; state.compareSection = null; document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab)); $("#exploreView").classList.toggle("hidden", state.tab !== "explore"); $("#compareView").classList.toggle("hidden", state.tab !== "compare"); render(); }
   const remove = event.target.closest("[data-remove-id]"); if (remove) {
@@ -427,8 +436,9 @@ document.addEventListener("click", event => {
     const index = state.files.findIndex(file => file.id === remove.dataset.removeId);
     const removed = state.files[index];
     if (!removed) return;
+    const previous = { activeId: state.activeId, compareLeft: state.compareLeft, compareRight: state.compareRight };
     state.files.splice(index, 1); state.activeId = state.files[0]?.id; state.compareLeft = state.files[0]?.id; state.compareRight = state.files[1]?.id || state.files[0]?.id; render();
-    toast(`Диагностика ${removed.filename} удалена.`, false, { label: "Отменить", callback: () => { state.files.splice(index, 0, removed); state.activeId = removed.id; state.compareLeft ||= removed.id; state.compareRight ||= removed.id; render(); toast("Диагностика восстановлена"); } });
+    toast(`Диагностика ${removed.filename} удалена.`, false, { label: "Отменить", callback: () => { state.files.splice(index, 0, removed); state.activeId = previous.activeId; state.compareLeft = previous.compareLeft; state.compareRight = previous.compareRight; render(); toast("Диагностика восстановлена"); } });
     return;
   }
   const fileCard = event.target.closest("[data-file-id]"); if (fileCard) { state.activeId = fileCard.dataset.fileId; state.activeSection = null; state.tab = "explore"; document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "explore")); $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); }

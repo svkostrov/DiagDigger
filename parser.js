@@ -113,6 +113,9 @@ function extractShowOutput(text, command) {
 function showCategory(command) {
   const explicit = SHOW_CATEGORY_OVERRIDES.get(command.toLowerCase());
   if (explicit) return explicit;
+  const normalized = command.toLowerCase();
+  const prefix = SHOW_CATEGORY_PREFIXES.find(([candidate]) => normalized === candidate || normalized.startsWith(`${candidate} `));
+  if (prefix) return prefix[1];
   if (/\b(wifi|wlan|association)/i.test(command)) return "wifi";
   if (/\bmws\b/i.test(command)) return "mws";
   if (/\b(vpn|tunnel|wireguard|openvpn|ipsec|l2tp|pptp|sstp|zerotier)\b/i.test(command)) return "vpn";
@@ -125,6 +128,18 @@ function showCategory(command) {
   if (/\b(version|system|identification|defaults)\b/i.test(command)) return "system";
   return "other";
 }
+
+const SHOW_CATEGORY_PREFIXES = [
+  ["show mws log", "logs"], ["show log", "logs"],
+  ["show ip http", "security"], ["show ip telnet", "security"], ["show ip ftp", "security"],
+  ["show ssh", "security"], ["show authentication", "security"], ["show dot1x", "security"],
+  ["show interface cells", "internet"], ["show interface operators", "internet"], ["show interface esim", "internet"], ["show interface dsl", "internet"],
+  ["show nvox", "services"], ["show ntce", "qos"],
+  ["show afp", "services"], ["show cifs", "services"], ["show dlna", "services"], ["show torrent", "services"], ["show udpxy", "services"], ["show printers", "services"],
+  ["show nextdns", "networkRules"], ["show skydns", "networkRules"], ["show chilli", "networkRules"], ["show dyndns", "networkRules"],
+  ["show ipv6", "ipv6"], ["show led", "general"], ["show button", "general"], ["show clock", "general"],
+  ["show easyconfig", "general"], ["show kabinet", "internet"],
+];
 
 const SHOW_CATEGORY_OVERRIDES = new Map([
   ["show acme", "internet"],
@@ -277,21 +292,21 @@ export function searchDiagnostic(diagnostic, query) {
 
   if (typeof diagnostic !== "string") {
     const virtualSections = diagnostic.sections.filter(item => item.virtual);
-    if (hits.length) {
-      const representations = new Map();
-      for (const section of virtualSections) {
-        const virtualLines = section.content.split(/\r?\n/);
-        for (let index = 0; index < virtualLines.length; index++) {
-          const lower = virtualLines[index].toLowerCase();
-          let from = 0;
-          while ((from = lower.indexOf(needle, from)) !== -1) {
-            const key = `${virtualLines[index]}\u0000${from + 1}`;
-            if (!representations.has(key)) representations.set(key, []);
-            representations.get(key).push({ name: section.name, key: section.key, line: index + 1 });
-            from += Math.max(needle.length, 1);
-          }
+    const representations = new Map();
+    for (const section of virtualSections) {
+      const virtualLines = section.content.split(/\r?\n/);
+      for (let index = 0; index < virtualLines.length; index++) {
+        const lower = virtualLines[index].toLowerCase();
+        let from = 0;
+        while ((from = lower.indexOf(needle, from)) !== -1) {
+          const key = `${virtualLines[index]}\u0000${from + 1}`;
+          if (!representations.has(key)) representations.set(key, []);
+          representations.get(key).push({ name: section.name, key: section.key, line: index + 1, lines: virtualLines, column: from + 1, generated: section.key === "derived:temperatures" || section.source === "errors" });
+          from += Math.max(needle.length, 1);
         }
       }
+    }
+    if (hits.length) {
       const physicalByOccurrence = new Map();
       for (const hit of hits) {
         const key = `${hit.text}\u0000${hit.column}`;
@@ -300,7 +315,13 @@ export function searchDiagnostic(diagnostic, query) {
       }
       for (const [key, refs] of representations) {
         const physical = physicalByOccurrence.get(key);
-        if (!physical?.length) continue;
+        if (!physical?.length) {
+          for (const ref of refs.filter(item => item.generated)) {
+            if (hits.length >= SEARCH_LIMIT) break;
+            hits.push({ section: ref.name, sectionType: "derived", sectionKey: ref.key, line: null, sectionLine: ref.line, column: ref.column, before: ref.lines[ref.line - 2] || "", text: ref.lines[ref.line - 1], after: ref.lines[ref.line] || "" });
+          }
+          continue;
+        }
         for (let index = 0; index < refs.length; index++) {
           const hit = physical[index % physical.length];
           const ref = refs[index];
@@ -319,11 +340,17 @@ export function searchDiagnostic(diagnostic, query) {
         hit.sectionLine = refs[0].line;
       }
     } else {
-      // Производное имя может отсутствовать в исходном XML (например, «Температура»).
-      // Содержимое производных секций не считаем повторно, когда место уже найдено в файле.
+      for (const refs of representations.values()) {
+        for (const ref of refs.filter(item => item.generated)) {
+          if (hits.length >= SEARCH_LIMIT) break;
+          hits.push({ section: ref.name, sectionType: "derived", sectionKey: ref.key, line: null, sectionLine: ref.line, column: ref.column, before: ref.lines[ref.line - 2] || "", text: ref.lines[ref.line - 1], after: ref.lines[ref.line] || "" });
+        }
+      }
+      // Производное имя тоже может отсутствовать в исходном XML.
       for (const section of virtualSections) {
         const column = section.name.toLowerCase().indexOf(needle);
         if (column === -1 || hits.length >= SEARCH_LIMIT) continue;
+        if (hits.some(hit => hit.sectionKey === section.key && hit.text === section.name && hit.column === column + 1)) continue;
         hits.push({ section: section.name, sectionType: "derived", sectionKey: section.key, line: null, sectionLine: null, column: column + 1, before: "", text: section.name, after: section.content.split(/\r?\n/)[0] || "" });
       }
     }
@@ -396,24 +423,26 @@ export function parseDiagnostic(filename, text) {
   const raw = extractFiles(text);
   if (!raw.length) throw new Error("В файле не найдены секции <file>. Возможно, это не Keenetic self-test.");
   const config = raw.find(item => item.name === "ndm:sharing-config")?.content || "";
-  const sections = raw.map(item => ({ key: `raw:${item.name}`, name: item.name, content: sanitizeRaw(item.content), category: categoryFor(item.name), virtual: false }));
-  sections.push({ key: "raw:selftest-structured", name: "Структурированные данные self-test", content: sanitizeRaw(text), category: "other", virtual: false });
+  const searchText = sanitizeRaw(text);
+  const sections = raw.map(item => ({ key: `raw:${item.name}`, name: item.name, content: item.content, category: categoryFor(item.name), virtual: false }));
+  sections.push({ key: "raw:selftest-structured", name: "Структурированные данные self-test", content: searchText, category: "other", virtual: false, sanitized: true });
   const errors = [...text.matchAll(/<error\b[^>]*>([\s\S]*?)<\/error>/gi)].map(match => decodeEntities(match[1].trim())).filter(Boolean);
   if (errors.length) sections.push({ key: "derived:collection-errors", name: "Ошибки сбора диагностики", content: errors.join("\n"), category: "other", virtual: true, source: "errors" });
   sections.push(...splitConfig(config));
   sections.push(...extractServiceConfigurations(config));
   sections.push(...extractShowSections(text));
-  for (const section of sections) {
-    section.content = sanitizeRaw(section.content);
-    if (!section.presentation && isStructuredJson(section.content)) section.presentation = "json";
-  }
   const temperatures = extractTemperatures(text);
   if (temperatures.length) sections.push({ key: "derived:temperatures", name: "Температура", category: "hardware", virtual: true, content: temperatures.map(sensor => `${temperatureDisplayName(sensor.id)}: ${sensor.value} °C`).join("\n") });
+  for (const section of sections) {
+    if (!section.sanitized) section.content = sanitizeRaw(section.content);
+    delete section.sanitized;
+    if (!section.presentation && isStructuredJson(section.content)) section.presentation = "json";
+  }
   const meta = { ...fileMeta, ...getConfigMeta(config), ...getShowVersionMeta(text), firmware: fileMeta.version, temperatures, maxTemperature: temperatures.length ? Math.max(...temperatures.map(sensor => sensor.value)) : null };
   const semantic = extractSemanticConfig(config, meta, temperatures);
   return {
     id: `${filename}:${text.length}:${Math.random().toString(36).slice(2)}`,
-    filename, size: new Blob([text]).size, text, searchText: sanitizeRaw(text), searchCache: new Map(), meta, sections, semantic,
+    filename, size: new Blob([text]).size, text, searchText, searchCache: new Map(), meta, sections, semantic,
     lineCount: text.split(/\r?\n/).length,
   };
 }
@@ -468,6 +497,8 @@ const statusLabel = state => state === "up" ? "Включено" : state === "do
 const sanitizeRaw = raw => String(raw || "").split(/\r?\n/).map(line => {
   const secret = /^(\s*(?:(?:wireguard|authentication)\s+)?(?:preshared-key|private-key|password|identity|wpa-psk)|\s*password\s+nt)\b/i;
   if (/^\s*crypto\s+ike\s+key\b/i.test(line)) return `${line.match(/^\s*/)?.[0] || ""}crypto ike [скрыто: ключ]`;
+  if (/^\s*(?:ft\s+)?iapp\s+key\b/i.test(line)) return `${line.match(/^\s*/)?.[0] || ""}[скрыто: ключ IAPP]`;
+  if (/^\s*wpa\s+psk\b/i.test(line)) return `${line.match(/^\s*/)?.[0] || ""}[скрыто: ключ Wi-Fi]`;
   if (secret.test(line)) return `${line.match(/^\s*/)?.[0] || ""}[скрыто: секрет]`;
   if (/^\s*wireguard peer\s+/i.test(line)) return line.replace(/(wireguard peer)\s+.*/i, "$1 [скрыто]");
   return line;

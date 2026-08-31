@@ -8,7 +8,8 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23079bd8'/%3E%3Cpath d='M17 16h15c11 0 18 6 18 16S43 48 32 48H17zm10 9v14h5c5 0 8-2 8-7s-3-7-8-7z' fill='white'/%3E%3C/svg%3E" />
     <script>
       (() => {
-        const saved = localStorage.getItem("diagdigger-theme") || "auto";
+        let saved = "auto";
+        try { saved = localStorage.getItem("diagdigger-theme") || "auto"; } catch {}
         const resolved = saved === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : saved;
         document.documentElement.dataset.theme = resolved;
         document.documentElement.dataset.themeMode = saved;
@@ -22,12 +23,12 @@
   <body>
     <a class="skip-link" href="#exploreView">К содержимому</a>
     <header class="topbar">
-      <a class="brand" href="#" aria-label="DiagDigger, версия 1.9">
+      <a class="brand" href="./index.html" aria-label="DiagDigger, версия 2.0">
         <span>DIAGDIGGER</span>
-        <span class="app-version" aria-label="Версия 1.9">v1.9</span>
+        <span class="app-version">v2.0</span>
       </a>
-      <div class="header-file-picker hidden" id="headerFilePicker"><label for="globalFileSelect">Диагностика</label><select id="globalFileSelect" aria-label="Выбранная диагностика"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
-      <fieldset class="theme-control"><legend>Стиль оформления</legend><select id="themeSelect" aria-label="Стиль оформления"><option value="auto">Автоматический</option><option value="light">Светлый</option><option value="dark">Тёмный</option></select></fieldset>
+      <div class="header-file-picker hidden" id="headerFilePicker"><label for="globalFileSelect">Диагностика</label><select id="globalFileSelect"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
+      <label class="theme-control"><span>Стиль оформления</span><select id="themeSelect"><option value="auto">Автоматический</option><option value="light">Светлый</option><option value="dark">Тёмный</option></select></label>
       <button class="button button-primary" id="headerUpload">Добавить файлы</button>
     </header>
 
@@ -66,13 +67,13 @@
             <button class="tab" data-tab="compare">Сравнение <span id="compareBadge">0</span></button>
           </nav>
 
-          <section id="exploreView" class="view"></section>
+          <section id="exploreView" class="view" tabindex="-1"></section>
           <section id="compareView" class="view hidden"></section>
         </div>
       </section>
     </main>
 
-    <div class="toast hidden" id="toast" role="status"></div>
+    <div class="toast hidden" id="toast"></div>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
