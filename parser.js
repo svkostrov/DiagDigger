@@ -186,24 +186,6 @@ export function searchDiagnostic(diagnostic, query) {
     }
   };
 
-  if (typeof diagnostic !== "string") {
-    const virtualLimit = Math.min(250, SEARCH_LIMIT);
-    for (const section of diagnostic.sections.filter(item => item.virtual)) {
-      const virtualLines = section.content.split(/\r?\n/);
-      const nameColumn = section.name.toLowerCase().indexOf(needle);
-      if (nameColumn !== -1 && hits.length < virtualLimit) hits.push({ section: section.name, sectionType: "derived", sectionKey: section.key, line: null, sectionLine: null, column: nameColumn + 1, before: "", text: section.name, after: virtualLines[0] || "" });
-      for (let index = 0; index < virtualLines.length && hits.length < virtualLimit; index++) {
-        const lower = virtualLines[index].toLowerCase();
-        let from = 0;
-        while (hits.length < virtualLimit && (from = lower.indexOf(needle, from)) !== -1) {
-          hits.push({ section: section.name, sectionType: "derived", sectionKey: section.key, line: null, sectionLine: index + 1, column: from + 1, before: virtualLines[index - 1] || "", text: virtualLines[index], after: virtualLines[index + 1] || "" });
-          from += Math.max(needle.length, 1);
-        }
-      }
-      if (hits.length >= virtualLimit) break;
-    }
-  }
-
   for (let index = 0; index < lines.length && hits.length < SEARCH_LIMIT; index++) {
     const line = lines[index];
     const fileStart = line.match(/<file\s+name="([^"]+)"/i);
@@ -215,6 +197,60 @@ export function searchDiagnostic(diagnostic, query) {
     addLineHits(line, index, fileSection || interfaceSection);
     if (fileSection && /<\/file>/i.test(line)) fileSection = null;
     if (!fileSection && interfaceSection && /<\/interface>/i.test(line)) interfaceSection = null;
+  }
+
+  if (typeof diagnostic !== "string") {
+    const virtualSections = diagnostic.sections.filter(item => item.virtual);
+    if (hits.length) {
+      const representations = new Map();
+      for (const section of virtualSections) {
+        const virtualLines = section.content.split(/\r?\n/);
+        for (let index = 0; index < virtualLines.length; index++) {
+          const lower = virtualLines[index].toLowerCase();
+          let from = 0;
+          while ((from = lower.indexOf(needle, from)) !== -1) {
+            const key = `${virtualLines[index]}\u0000${from + 1}`;
+            if (!representations.has(key)) representations.set(key, []);
+            representations.get(key).push({ name: section.name, key: section.key, line: index + 1 });
+            from += Math.max(needle.length, 1);
+          }
+        }
+      }
+      const physicalByOccurrence = new Map();
+      for (const hit of hits) {
+        const key = `${hit.text}\u0000${hit.column}`;
+        if (!physicalByOccurrence.has(key)) physicalByOccurrence.set(key, []);
+        physicalByOccurrence.get(key).push(hit);
+      }
+      for (const [key, refs] of representations) {
+        const physical = physicalByOccurrence.get(key);
+        if (!physical?.length) continue;
+        for (let index = 0; index < refs.length; index++) {
+          const hit = physical[index % physical.length];
+          const ref = refs[index];
+          hit._representations ||= [];
+          if (!hit._representations.some(item => item.key === ref.key)) hit._representations.push(ref);
+        }
+      }
+      for (const hit of hits) {
+        const refs = hit._representations || [];
+        if (!refs.length) continue;
+        delete hit._representations;
+        hit.sections = [...new Set([hit.section, ...refs.map(ref => ref.name)])];
+        hit.section = refs[0].name;
+        hit.sectionType = "derived";
+        hit.sectionKey = refs[0].key;
+        hit.sectionLine = refs[0].line;
+      }
+    } else {
+      // Производное имя может отсутствовать в исходном XML (например, «Температура»).
+      // Содержимое производных секций не считаем повторно, когда место уже найдено в файле.
+      for (const section of virtualSections) {
+        const column = section.name.toLowerCase().indexOf(needle);
+        if (column === -1 || hits.length >= SEARCH_LIMIT) continue;
+        hits.push({ section: section.name, sectionType: "derived", sectionKey: section.key, line: null, sectionLine: null, column: column + 1, before: "", text: section.name, after: section.content.split(/\r?\n/)[0] || "" });
+      }
+    }
   }
 
   hits.truncated = hits.length >= SEARCH_LIMIT;

@@ -169,7 +169,8 @@ function renderSearchResults(file, query) {
 
 function renderSearchHit(hit, query) {
   const location = [hit.line ? `строка файла ${hit.line}` : null, hit.sectionLine ? `строка раздела ${hit.sectionLine}` : null, `столбец ${hit.column}`].filter(Boolean).join(" · ");
-  return `<div class="search-hit"><div class="search-hit-location">${location}</div><pre>${hit.before ? `<span>${escapeHtml(decodeDisplayEntities(hit.before))}</span>\n` : ""}${highlight(hit.text, query)}${hit.after ? `\n<span>${escapeHtml(decodeDisplayEntities(hit.after))}</span>` : ""}</pre></div>`;
+  const representations = hit.sections?.length > 1 ? `<div class="search-hit-sections" title="${escapeHtml(hit.sections.join(" · "))}">Представления: ${escapeHtml(hit.sections.join(" · "))}</div>` : "";
+  return `<div class="search-hit"><div class="search-hit-location">${location}</div>${representations}<pre>${hit.before ? `<span>${escapeHtml(decodeDisplayEntities(hit.before))}</span>\n` : ""}${highlight(hit.text, query)}${hit.after ? `\n<span>${escapeHtml(decodeDisplayEntities(hit.after))}</span>` : ""}</pre></div>`;
 }
 
 function renderCategory(key, sections, query, expanded = false) {

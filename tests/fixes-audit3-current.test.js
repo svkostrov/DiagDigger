@@ -31,6 +31,6 @@ test("текущая правка: неизвестный show выделен и
   const first = searchDiagnostic(parsed, "needle");
   const second = searchDiagnostic(parsed, "needle");
   assert.ok(first.some(hit => hit.sectionType === "derived"));
-  assert.ok(first.some(hit => hit.sectionType !== "derived"));
+  assert.ok(first.every(hit => hit.line !== null), "производное представление должно ссылаться на место в XML");
   assert.equal(second, first, "повторный запрос должен возвращаться из кэша");
 });
