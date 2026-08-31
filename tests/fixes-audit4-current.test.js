@@ -35,11 +35,11 @@ test("BUG-079: один разбор пропускает через санит�
 
 test("BUG-087: словарь show раскладывает доступ, логи, сервисы и служебные подсистемы", () => {
   const expected = new Map([
-    ["show ip http lockout-policy", "security"], ["show ssh fingerprint", "security"],
-    ["show authentication session", "security"], ["show log", "logs"],
-    ["show mws log", "logs"], ["show nvox active-calls", "services"],
-    ["show ntce applications", "qos"], ["show cifs", "services"],
-    ["show nextdns profiles", "networkRules"], ["show interface dsl status", "internet"],
+    ["show ip http lockout-policy", "users"], ["show ssh fingerprint", "users"],
+    ["show authentication session", "users"], ["show log", "diagnostics"],
+    ["show mws log", "diagnostics"], ["show nvox active-calls", "telephony"],
+    ["show ntce applications", "appTraffic"], ["show cifs", "services"],
+    ["show nextdns profiles", "internetFilters"], ["show interface dsl status", "internet"],
   ]);
   const markers = [...expected].map(([command]) => `<!-- ${command} --><response><ok>yes</ok></response>`).join("\n");
   const diagnostic = parseDiagnostic(diagnosticName, `<selftest>${markers}<file name="ndm:sharing-config">system\n!</file></selftest>`);

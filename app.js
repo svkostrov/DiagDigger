@@ -19,14 +19,16 @@ const NAV_GROUP_ICONS = {
   networks: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5a13 13 0 0 1 17 0M6.8 13a8.2 8.2 0 0 1 10.4 0M10 16.3a3.3 3.3 0 0 1 4 0"/><circle cx="12" cy="19.2" r="1" fill="currentColor" stroke="none"/></svg>`,
   rules: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 20 6v5.7c0 5.1-3.2 8.1-8 10-4.8-1.9-8-4.9-8-10V6z"/></svg>`,
   management: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 1.3)"><path d="m9.7 2.8.7-1.3h3.2l.7 1.3 1.7.7 1.4-.4 2.2 2.2-.4 1.4.7 1.7 1.3.7v3.2l-1.3.7-.7 1.7.4 1.4-2.2 2.2-1.4-.4-1.7.7-.7 1.3h-3.2l-.7-1.3-1.7-.7-1.4.4-2.2-2.2.4-1.4-.7-1.7-1.3-.7V9.1l1.3-.7.7-1.7-.4-1.4 2.2-2.2 1.4.4z"/><circle cx="12" cy="10.7" r="3.2"/></g></svg>`,
+  telephony: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 3.5 10 8 8.1 9.9c1.2 2.4 3.1 4.3 5.5 5.5l1.9-1.9 4.5 2.8-.8 3.2c-.2.8-.9 1.3-1.7 1.2C10 19.8 4.2 14 3.3 6.5c-.1-.8.4-1.5 1.2-1.7z"/></svg>`,
 };
 
 const NAV_GROUPS = [
-  { title: "Статус", icon: "status", categories: ["system", "hardware", "processes", "memory"] },
+  { title: "Статус", icon: "status", categories: ["system", "traffic", "appTraffic", "wifiMonitor"] },
   { title: "Интернет", icon: "internet", categories: ["internet", "vpn"] },
-  { title: "Мои сети и Wi‑Fi", icon: "networks", categories: ["interfaces", "wifi", "mws", "hosts", "dhcp"] },
-  { title: "Сетевые правила", icon: "rules", categories: ["routing", "networkRules", "cloud", "ipv6", "qos", "security"] },
-  { title: "Управление", icon: "management", categories: ["configuration", "general", "users", "domain", "usb", "services", "logs", "other"] },
+  { title: "Мои сети и Wi‑Fi", icon: "networks", categories: ["interfaces", "wifi", "mws", "hosts", "dhcp", "qos"] },
+  { title: "Сетевые правила", icon: "rules", categories: ["internetFilters", "firewall", "networkRules", "routing", "remoteAccess", "wifiAccess", "ipv6"] },
+  { title: "Управление", icon: "management", categories: ["general", "usb", "services", "users", "diagnostics", "configuration", "other"] },
+  { title: "Телефония", icon: "telephony", categories: ["telephony"] },
 ];
 
 const themeMedia = matchMedia("(prefers-color-scheme: dark)");
@@ -154,7 +156,7 @@ function renderExplore() {
     <div class="view-head">
       <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h1>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h1><p>${escapeHtml(file.filename)}</p></div>
       <div class="meta-grid">
-        <div><span>Устройство · HW ID</span><b>${escapeHtml(file.meta.device)} · ${escapeHtml(file.meta.hwId)}</b></div>
+        <div><span>Устройство</span><b>${escapeHtml(file.meta.device)}</b></div>
         <div><span>Прошивка</span><b>${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
         <div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
         <div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
@@ -207,6 +209,7 @@ function renderSectionButton(section) {
 function renderSectionDetail(section) {
   if (section.presentation === "associations") return renderAssociations(section);
   if (section.presentation === "json") return renderJsonSection(section);
+  if (["devices", "neighbours", "traffic-hosts", "arp", "proxies", "xml-records"].includes(section.presentation)) return renderHumanXmlSection(section);
   if (["ip-policy", "ip-routes", "ipv6-routes", "dhcp-pools", "cpustat"].includes(section.presentation)) return renderStructuredXmlSection(section);
   return `<div class="section-detail">
     <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
@@ -239,7 +242,7 @@ function renderJsonTable(items, title = "Объекты") {
 function renderJsonArray(values, title) {
   if (values.length && values.every(isJsonObject)) return renderJsonTable(values, title);
   if (values.length <= 12 && values.every(value => value === null || typeof value !== "object")) {
-    return `<section class="json-group"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${values.length} ${plural(values.length, "значение", "значения", "значений")}</span></div><div class="json-values">${values.map(value => `<code>${escapeHtml(jsonScalar(value))}</code>`).join("") || `<span class="json-empty">Пустой массив</span>`}</div></section>`;
+    return `<section class="json-group"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${values.length ? `${values.length} ${plural(values.length, "значение", "значения", "значений")}` : "Пустой массив"}</span></div>${values.length ? `<div class="json-values">${values.map(value => `<code>${escapeHtml(jsonScalar(value))}</code>`).join("")}</div>` : ""}</section>`;
   }
   return `<section class="json-group"><div class="json-group-head"><h3>${escapeHtml(title)}</h3></div>${renderJsonComplexValue(values)}</section>`;
 }
@@ -264,6 +267,121 @@ function parseXmlFragment(content) {
 
 function directXmlValue(element, name) {
   return [...element.children].find(child => child.tagName === name)?.textContent?.trim() || "—";
+}
+
+function directXmlElement(element, name) {
+  return [...element.children].find(child => child.tagName === name) || null;
+}
+
+function nestedXmlValue(element, parent, name) {
+  const container = directXmlElement(element, parent);
+  return container ? directXmlValue(container, name) : "—";
+}
+
+const XML_FIELD_LABELS = {
+  name: "Имя", hostname: "Имя устройства", mac: "MAC-адрес", ip: "IPv4-адрес", ip6: "IPv6-адрес",
+  address: "Адрес", "address-family": "Протокол", interface: "Интерфейс", state: "Состояние",
+  active: "Активен", link: "Подключение", wireless: "Тип связи", "last-seen": "Последняя активность",
+  uptime: "В сети", rxbytes: "Получено", txbytes: "Отправлено", access: "Доступ", priority: "Приоритет",
+  ssid: "Сеть Wi‑Fi", ap: "Точка доступа", rssi: "Сигнал", mode: "Стандарт", security: "Защита",
+  fqdn: "Доменное имя", proto: "Протокол", upstream: "Назначение", host: "Узел", allow: "Доступ", ndns: "Удалённый доступ",
+  description: "Описание", firmware: "Прошивка", expired: "Срок аренды", leasetime: "Аренда",
+};
+
+function humanXmlValue(name, value) {
+  if (value === "—" || value === "") return "—";
+  if (["rxbytes", "txbytes"].includes(name)) return formatTraffic(value);
+  if (["uptime", "last-seen", "leasetime"].includes(name)) return formatUptime(value);
+  if (name === "wireless") return value === "yes" ? "Wi‑Fi" : "Кабель";
+  if (["active", "ndns"].includes(name)) return value === "yes" ? "Да" : value === "no" ? "Нет" : value;
+  if (name === "expired") return value === "yes" ? "Истёк" : value === "no" ? "Действует" : value;
+  return value;
+}
+
+function humanState(value) {
+  return ({ yes: "В сети", no: "Неактивен", up: "В сети", down: "Отключён", REACHABLE: "Доступен", STALE: "Неактивен", active: "Активен", expired: "Истёк" })[value] || value || "Состояние неизвестно";
+}
+
+function renderHumanCard({ title, subtitle = "", status = "", online = true, primary = "", fields = [] }) {
+  const visibleFields = fields.filter(([, value]) => value !== undefined && value !== null && value !== "" && value !== "—");
+  return `<article class="association-card record-card"><div><code>${escapeHtml(title || "Без имени")}</code>${status ? `<span class="association-status ${online ? "online" : "offline"}">${escapeHtml(status)}</span>` : ""}</div>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ""}${primary ? `<strong>${escapeHtml(primary)}</strong>` : ""}<dl>${visibleFields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></article>`;
+}
+
+function renderDeviceRecord(host) {
+  const active = directXmlValue(host, "active") === "yes" && directXmlValue(host, "link") !== "down";
+  const name = [directXmlValue(host, "name"), directXmlValue(host, "hostname"), directXmlValue(host, "mac")].find(value => value !== "—");
+  const connection = directXmlValue(host, "ssid") !== "—" ? `${directXmlValue(host, "ssid")} · ${directXmlValue(host, "ap")}` : nestedXmlValue(host, "interface", "name");
+  const speed = directXmlValue(host, "txrate") !== "—" ? `${directXmlValue(host, "txrate")} Мбит/с` : directXmlValue(host, "speed") !== "—" ? `${directXmlValue(host, "speed")} Мбит/с` : "—";
+  return renderHumanCard({
+    title: name, subtitle: directXmlValue(host, "mac"), status: active ? "В сети" : "Не в сети", online: active,
+    primary: directXmlValue(host, "ip"),
+    fields: [["Подключение", connection], ["Скорость", speed], ["Сигнал", directXmlValue(host, "rssi") === "—" ? "—" : `${directXmlValue(host, "rssi")} dBm`], ["Трафик", `↓ ${formatTraffic(directXmlValue(host, "rxbytes"))} / ↑ ${formatTraffic(directXmlValue(host, "txbytes"))}`], ["В сети", formatUptime(directXmlValue(host, "uptime"))], ["Доступ", directXmlValue(host, "access")], ["DNS-фильтр", nestedXmlValue(host, "dns-filter", "profile")]],
+  });
+}
+
+function neighbourAddresses(neighbour) {
+  const direct = directXmlValue(neighbour, "address");
+  if (direct !== "—") return direct;
+  const container = directXmlElement(neighbour, "addresses");
+  if (!container) return "—";
+  return [...container.children].map(item => directXmlValue(item, "address")).filter(value => value !== "—").join(", ") || "—";
+}
+
+function renderNeighbourRecord(neighbour) {
+  const expired = directXmlValue(neighbour, "expired") === "yes";
+  const description = directXmlValue(neighbour, "description");
+  return renderHumanCard({
+    title: description !== "—" ? description : directXmlValue(neighbour, "mac"), subtitle: directXmlValue(neighbour, "mac"), status: expired ? "Истёк" : "Обнаружен", online: !expired,
+    primary: neighbourAddresses(neighbour),
+    fields: [["Интерфейс", directXmlValue(neighbour, "interface")], ["Протокол", directXmlValue(neighbour, "address-family").toUpperCase()], ["Тип связи", humanXmlValue("wireless", directXmlValue(neighbour, "wireless"))], ["Последняя активность", formatUptime(directXmlValue(neighbour, "last-seen"))], ["Аренда", formatUptime(directXmlValue(neighbour, "leasetime"))], ["Прошивка", directXmlValue(neighbour, "firmware")]],
+  });
+}
+
+function renderArpRecord(arp) {
+  const state = directXmlValue(arp, "state");
+  return renderHumanCard({ title: directXmlValue(arp, "name") !== "—" ? directXmlValue(arp, "name") : directXmlValue(arp, "mac"), subtitle: directXmlValue(arp, "mac"), status: humanState(state), online: state === "REACHABLE", primary: directXmlValue(arp, "ip"), fields: [["Интерфейс", directXmlValue(arp, "interface")]] });
+}
+
+function renderProxyRecord(proxy) {
+  const enabled = directXmlValue(proxy, "ndns") === "yes";
+  return renderHumanCard({ title: directXmlValue(proxy, "name"), subtitle: directXmlValue(proxy, "proto").toUpperCase(), status: enabled ? "Опубликован" : "Локальный", online: enabled, primary: directXmlValue(proxy, "fqdn"), fields: [["Назначение", directXmlValue(proxy, "upstream")], ["Узел", directXmlValue(proxy, "host")], ["Доступ", directXmlValue(proxy, "allow")]] });
+}
+
+function renderTrafficHostRecord(record) {
+  const host = directXmlElement(record, "host") || record;
+  const applications = [...record.children].filter(child => child.tagName === "application");
+  const totals = applications.reduce((sum, app) => ({ rx: sum.rx + (Number(directXmlValue(app, "rxbytes")) || 0), tx: sum.tx + (Number(directXmlValue(app, "txbytes")) || 0) }), { rx: 0, tx: 0 });
+  const top = applications.map(app => ({ name: directXmlValue(app, "long"), bytes: (Number(directXmlValue(app, "rxbytes")) || 0) + (Number(directXmlValue(app, "txbytes")) || 0) })).sort((a, b) => b.bytes - a.bytes).slice(0, 4).map(app => app.name).join(", ");
+  const name = [directXmlValue(host, "name"), directXmlValue(host, "hostname"), directXmlValue(record, "mac")].find(value => value !== "—");
+  return renderHumanCard({ title: name, subtitle: directXmlValue(record, "mac"), status: `${applications.length} ${plural(applications.length, "приложение", "приложения", "приложений")}`, online: true, primary: directXmlValue(host, "ip"), fields: [["Операционная система", directXmlValue(record, "os-long")], ["Основные приложения", top], ["Трафик приложений", `↓ ${formatTraffic(totals.rx)} / ↑ ${formatTraffic(totals.tx)}`], ["Подключение", nestedXmlValue(host, "interface", "name")]] });
+}
+
+function genericXmlRecords(root) {
+  let records = [...root.children];
+  if (records.length === 1 && /^(response|result|list|items)$/i.test(records[0].tagName) && records[0].children.length) records = [...records[0].children];
+  return records;
+}
+
+function renderGenericXmlRecord(record) {
+  const scalars = [...record.children].filter(child => !child.children.length && child.textContent.trim()).slice(0, 10);
+  const value = name => directXmlValue(record, name);
+  const title = [value("name"), value("hostname"), value("description"), value("fqdn"), value("mac"), value("address"), value("id")].find(item => item !== "—") || record.tagName;
+  const state = [value("state"), value("status"), value("active"), value("link")].find(item => item !== "—") || "";
+  return renderHumanCard({ title, status: state ? humanState(state) : "", online: !/^(no|down|expired|STALE)$/i.test(state), fields: scalars.filter(child => !["name", "hostname", "description"].includes(child.tagName)).map(child => [XML_FIELD_LABELS[child.tagName] || child.tagName.replaceAll("-", " "), humanXmlValue(child.tagName, child.textContent.trim())]) });
+}
+
+function renderHumanXmlSection(section) {
+  const root = parseXmlFragment(section.content);
+  const records = root ? genericXmlRecords(root) : [];
+  let cards = [];
+  if (section.presentation === "devices") cards = records.filter(item => item.tagName === "host").map(renderDeviceRecord);
+  else if (section.presentation === "neighbours") cards = records.filter(item => item.tagName === "neighbour").map(renderNeighbourRecord);
+  else if (section.presentation === "traffic-hosts") cards = records.filter(item => item.tagName === "host").map(renderTrafficHostRecord);
+  else if (section.presentation === "arp") cards = records.filter(item => item.tagName === "arp").map(renderArpRecord);
+  else if (section.presentation === "proxies") cards = records.filter(item => item.tagName === "proxy").map(renderProxyRecord);
+  else cards = records.map(renderGenericXmlRecord);
+  const label = cards.length ? `${cards.length} ${plural(cards.length, "запись", "записи", "записей")}` : "Структурированных записей нет";
+  return `<div class="section-detail human-xml-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><p class="association-summary">${label}. Данные представлены в удобном виде; исходный XML доступен ниже.</p><div class="association-grid record-grid">${cards.join("") || `<div class="empty-results">Не удалось выделить записи из этого XML.</div>`}</div><details class="json-raw human-xml-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div>`;
 }
 
 function renderDataTable(title, rows, columns) {

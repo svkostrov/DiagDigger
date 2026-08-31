@@ -203,7 +203,7 @@ test("меню показывает только категории, для ко
 
 test("перенесённые show-команды видны в новых разделах, а не в «Прочем»", async ({ page }) => {
   await upload(page, KN1811);
-  for (const category of ["hosts", "networkRules", "cloud", "ipv6", "qos", "general", "users", "domain", "usb"]) {
+  for (const category of ["hosts", "networkRules", "remoteAccess", "ipv6", "appTraffic", "general", "users", "usb", "diagnostics"]) {
     await expect(page.locator(`[data-nav-category='${category}']`), category).toBeVisible();
   }
   await page.click("[data-nav-category='other']");
@@ -211,7 +211,7 @@ test("перенесённые show-команды видны в новых ра
   for (const command of ["show acme", "show button", "show cloud", "show device-list", "show ipv6 prefixes", "show ntce status", "show usb"]) {
     expect(otherText, command).not.toContain(command);
   }
-  await page.click("[data-nav-category='cloud']");
+  await page.click("[data-nav-category='remoteAccess']");
   await expect(page.locator(".category-card .section-list")).toContainText("show cloud ndmp status");
   await page.click("[data-nav-category='general']");
   await expect(page.locator(".category-card .section-list")).toContainText("show configurator status");
@@ -221,7 +221,7 @@ test("маршруты, политики, DHCP и CPU отображаются �
   await upload(page, KN1811);
   const sections = [
     ["routing", "Политики маршрутизации"], ["routing", "Маршруты IPv4"], ["routing", "Маршруты IPv6"],
-    ["dhcp", "Пулы DHCP"], ["processes", "Загрузка процессора"],
+    ["dhcp", "Пулы DHCP"], ["diagnostics", "Загрузка процессора"],
   ];
   for (const [category, name] of sections) {
     await page.click(`[data-nav-category='${category}']`);
@@ -235,8 +235,8 @@ test("маршруты, политики, DHCP и CPU отображаются �
 
 test("счётчики в меню совпадают с числом секций в категории", async ({ page }) => {
   await upload(page, SMALL);
-  await page.click("[data-nav-category='memory']");
-  const badge = await page.locator("[data-nav-category='memory'] .nav-count").innerText();
+  await page.click("[data-nav-category='diagnostics']");
+  const badge = await page.locator("[data-nav-category='diagnostics'] .nav-count").innerText();
   await expect(page.locator(".category-card .section-list > button")).toHaveCount(Number(badge));
 });
 

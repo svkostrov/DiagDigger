@@ -1,42 +1,53 @@
 export const CATEGORY_INFO = {
   overview: { title: "Общие сведения", icon: "◫", order: 0 },
-  system: { title: "Система", icon: "◈", order: 1 },
-  hardware: { title: "Оборудование", icon: "◆", order: 2 },
-  processes: { title: "Процессы и ядро", icon: "▦", order: 3 },
-  memory: { title: "Память", icon: "▤", order: 4 },
+  system: { title: "Системный монитор", icon: "◈", order: 1 },
+  traffic: { title: "Монитор трафика", icon: "↕", order: 2 },
+  appTraffic: { title: "Анализатор трафика приложений", icon: "▥", order: 3 },
+  wifiMonitor: { title: "Монитор Wi‑Fi", icon: "⌁", order: 4 },
   internet: { title: "Интернет", icon: "◎", order: 5 },
   vpn: { title: "VPN и туннели", icon: "◇", order: 6 },
-  interfaces: { title: "Интерфейсы", icon: "⇆", order: 7 },
-  wifi: { title: "Wi‑Fi", icon: "⌁", order: 8 },
-  mws: { title: "MWS", icon: "⌘", order: 9 },
-  hosts: { title: "Хосты", icon: "▧", order: 10 },
+  interfaces: { title: "Сегменты", icon: "⇆", order: 7 },
+  wifi: { title: "Точки доступа", icon: "⌁", order: 8 },
+  mws: { title: "Wi‑Fi-система", icon: "⌘", order: 9 },
+  hosts: { title: "Списки клиентов", icon: "▧", order: 10 },
   dhcp: { title: "DHCP и DNS", icon: "≋", order: 11 },
-  routing: { title: "Маршрутизация", icon: "↝", order: 12 },
-  networkRules: { title: "Сетевые правила", icon: "⌘", order: 13 },
-  cloud: { title: "Облако", icon: "☁", order: 14 },
-  ipv6: { title: "IPv6", icon: "6", order: 15 },
-  qos: { title: "QoS", icon: "≋", order: 16 },
-  security: { title: "Безопасность", icon: "⬡", order: 17 },
-  configuration: { title: "Полная конфигурация", icon: "⌘", order: 18 },
-  general: { title: "Общие настройки", icon: "⚙", order: 19 },
-  users: { title: "Пользователи", icon: "♙", order: 20 },
-  domain: { title: "Доменное имя", icon: "◎", order: 21 },
-  usb: { title: "USB", icon: "↯", order: 22 },
-  services: { title: "Сервисы", icon: "⚙", order: 23 },
-  logs: { title: "Логи", icon: "≡", order: 24 },
-  other: { title: "Прочее", icon: "•••", order: 25 },
+  qos: { title: "IntelliQoS", icon: "≋", order: 12 },
+  internetFilters: { title: "Интернет-фильтры", icon: "◉", order: 13 },
+  firewall: { title: "Межсетевой экран", icon: "⬡", order: 14 },
+  networkRules: { title: "Переадресация портов", icon: "⇥", order: 15 },
+  routing: { title: "Маршрутизация", icon: "↝", order: 16 },
+  ipv6: { title: "IPv6", icon: "6", order: 17 },
+  remoteAccess: { title: "Доменное имя и удалённый доступ", icon: "☁", order: 18 },
+  wifiAccess: { title: "Контроль доступа Wi‑Fi", icon: "⌾", order: 19 },
+  general: { title: "Настройки системы", icon: "⚙", order: 20 },
+  usb: { title: "Накопители и устройства", icon: "↯", order: 21 },
+  services: { title: "Приложения и сервисы", icon: "⚙", order: 22 },
+  users: { title: "Пользователи и доступ", icon: "♙", order: 23 },
+  diagnostics: { title: "Диагностика", icon: "≡", order: 24 },
+  configuration: { title: "Полная конфигурация", icon: "⌘", order: 25 },
+  telephony: { title: "Телефония", icon: "☎", order: 26 },
+  other: { title: "Прочее", icon: "•••", order: 27 },
 };
 
 const CONFIG_GROUPS = [
-  ["mws", "MWS — модульная Wi‑Fi-система", /^mws\b/i],
+  ["wifiAccess", "Контроль доступа Wi‑Fi", /^(access-list|mws\s+member\s+port\s+access)\b/i],
+  ["mws", "Wi‑Fi-система", /^mws\b/i],
   ["wifi", "Wi‑Fi и точки доступа", /^(interface\s+Wifi|wifi|wlan|access-point|mesh|roaming)/i],
-  ["vpn", "VPN и туннели", /^(interface\s+(Wireguard|OpenVPN|OpenConnect|IPsec|L2TP|PPTP|SSTP|GRE|EoIP|IPIP|Tunnel|ZeroTier)|crypto|ipsec|vpn-server|wireguard-server|oc-server|sstp-server)/i],
+  ["remoteAccess", "Доменное имя и удалённый доступ", /^(ndns|ndss|cloud|oc-server|dyndns)\b/i],
+  ["vpn", "VPN и туннели", /^(interface\s+(Wireguard|OpenVPN|OpenConnect|IPsec|L2TP|PPTP|SSTP|GRE|EoIP|IPIP|Tunnel|ZeroTier)|crypto|ipsec|vpn-server|wireguard-server|sstp-server)/i],
   ["internet", "Интернет-подключения", /^(interface\s+(PPPoE|UsbModem|UsbLte|UsbQmi|CdcEthernet|Yota)|pppoe|kabinet)/i],
   ["interfaces", "Интерфейсы и сегменты", /^(interface|port|switch|vlan|bridge|segment)/i],
-  ["routing", "Маршруты, политики и NAT", /^(ip (route|policy|nat|static|conntrack)|ipv6 (route|static|local-prefix)|route|router|policy|nat|ppe)/i],
-  ["dhcp", "DHCP, DNS и узлы", /^(ip dhcp|ip name-server|dns-proxy|nextdns|skydns|known host|host |ipv6 subnet|mdns)/i],
-  ["security", "Доступ и безопасность", /^(access|access-list|object-group|firewall|isolate-private|user|ntce|ip (ssh|telnet|http|hotspot|ftp)\b|cloud control)/i],
-  ["services", "Сервисы и приложения", /^(service|afp|cifs|dlna|dyndns|opkg|ntp|snmp|upnp|printer|torrent|udpxy|easyconfig)/i],
+  ["routing", "Маршрутизация", /^(ip (route|policy|conntrack)|ipv6 (route|static|local-prefix)|route|router|policy|ppe)/i],
+  ["networkRules", "Переадресация портов", /^(ip (nat|static)\b|nat\b|upnp\s+redirect)/i],
+  ["hosts", "Списки клиентов", /^(known host|host\s|ip dhcp host)\b/i],
+  ["internetFilters", "Интернет-фильтры", /^(dns-proxy filter|nextdns|skydns|object-group fqdn)\b/i],
+  ["dhcp", "DHCP и DNS", /^(ip dhcp|ip name-server|dns-proxy|ipv6 subnet|mdns)/i],
+  ["firewall", "Межсетевой экран", /^(access\b|object-group ip|firewall|isolate-private)/i],
+  ["users", "Пользователи и доступ", /^(user|ip (ssh|telnet|http|ftp)\b)/i],
+  ["appTraffic", "Анализатор трафика приложений", /^ntce\b/i],
+  ["qos", "IntelliQoS", /^(qos|intellioqos|traffic-shape)\b/i],
+  ["telephony", "Телефония", /^nvox\b/i],
+  ["services", "Сервисы и приложения", /^(service|afp|cifs|dlna|opkg|ntp|snmp|upnp|printer|torrent|udpxy|easyconfig)/i],
   ["system", "Система и компоненты", /^(system|hostname|domainname|administrator|clock|schedule|button|led|components)/i],
 ];
 
@@ -114,55 +125,75 @@ function showCategory(command) {
   const explicit = SHOW_CATEGORY_OVERRIDES.get(command.toLowerCase());
   if (explicit) return explicit;
   const normalized = command.toLowerCase();
-  const prefix = SHOW_CATEGORY_PREFIXES.find(([candidate]) => normalized === candidate || normalized.startsWith(`${candidate} `));
+  const prefix = SHOW_CATEGORY_PREFIXES
+    .filter(([candidate]) => normalized === candidate || normalized.startsWith(`${candidate} `))
+    .sort((a, b) => b[0].length - a[0].length)[0];
   if (prefix) return prefix[1];
   if (/\b(wifi|wlan|association)/i.test(command)) return "wifi";
   if (/\bmws\b/i.test(command)) return "mws";
   if (/\b(vpn|tunnel|wireguard|openvpn|ipsec|l2tp|pptp|sstp|zerotier)\b/i.test(command)) return "vpn";
   if (/\b(dhcp|dns|hotspot|host|lease)\b/i.test(command)) return "dhcp";
   if (/\b(route|routing|policy|nat)\b/i.test(command)) return "routing";
-  if (/\b(firewall|security|access|user|crypto)\b/i.test(command)) return "security";
-  if (/\b(memory|meminfo|swap)\b/i.test(command)) return "memory";
-  if (/\b(process|cpu|kernel|cpustat)\b/i.test(command)) return "processes";
+  if (/\b(firewall|security|netfilter)\b/i.test(command)) return "firewall";
+  if (/\b(access|user|authentication|ssh|telnet)\b/i.test(command)) return "users";
+  if (/\b(memory|meminfo|swap|process|cpu|kernel|cpustat)\b/i.test(command)) return "diagnostics";
   if (/\b(interface|port|switch|vlan|bridge)\b/i.test(command)) return "interfaces";
   if (/\b(version|system|identification|defaults)\b/i.test(command)) return "system";
   return "other";
 }
 
 const SHOW_CATEGORY_PREFIXES = [
-  ["show mws log", "logs"], ["show log", "logs"],
-  ["show ip http", "security"], ["show ip telnet", "security"], ["show ip ftp", "security"],
-  ["show ssh", "security"], ["show authentication", "security"], ["show dot1x", "security"],
+  ["show mws log", "diagnostics"], ["show log", "diagnostics"],
+  ["show ip http", "users"], ["show ip telnet", "users"], ["show ip ftp", "users"],
+  ["show ssh", "users"], ["show authentication", "users"], ["show dot1x", "wifiAccess"],
   ["show interface cells", "internet"], ["show interface operators", "internet"], ["show interface esim", "internet"], ["show interface dsl", "internet"],
-  ["show nvox", "services"], ["show ntce", "qos"],
+  ["show interface channel-utilization", "wifiMonitor"], ["show interface spectrum", "wifiMonitor"],
+  ["show interface traffic-counter", "traffic"], ["show interface stat", "traffic"], ["show interface rrd", "traffic"],
+  ["show interface antennas", "wifi"], ["show interface bands", "wifi"], ["show interface channels", "wifi"],
+  ["show interface country-codes", "wifi"], ["show interface rf", "wifi"], ["show interface wps", "wifi"],
+  ["show interface zerotier", "vpn"], ["show interface", "interfaces"],
+  ["show crypto", "vpn"], ["show ipsec", "vpn"], ["show sstp-server", "vpn"], ["show vpn-server", "vpn"], ["show wireguard-server", "vpn"],
+  ["show nvox", "telephony"], ["show ntce", "appTraffic"],
   ["show afp", "services"], ["show cifs", "services"], ["show dlna", "services"], ["show torrent", "services"], ["show udpxy", "services"], ["show printers", "services"],
-  ["show nextdns", "networkRules"], ["show skydns", "networkRules"], ["show chilli", "networkRules"], ["show dyndns", "networkRules"],
-  ["show ipv6", "ipv6"], ["show led", "general"], ["show button", "general"], ["show clock", "general"],
+  ["show dns-proxy filter", "internetFilters"], ["show nextdns", "internetFilters"], ["show skydns", "internetFilters"], ["show chilli", "internetFilters"],
+  ["show dyndns", "remoteAccess"], ["show cloud", "remoteAccess"], ["show ndns", "remoteAccess"], ["show ndss", "remoteAccess"], ["show oc-server", "remoteAccess"],
+  ["show ipv6", "ipv6"],
+  ["show ip arp", "hosts"], ["show ip neighbour", "hosts"], ["show ip dhcp bindings", "hosts"], ["show ip dhcp pool", "dhcp"],
+  ["show ip name-server", "dhcp"], ["show ip nat", "networkRules"], ["show ip route", "routing"], ["show ip policy", "routing"],
+  ["show ip rule", "firewall"], ["show netfilter", "firewall"], ["show object-group fqdn", "internetFilters"],
+  ["show upnp redirect", "networkRules"], ["show upnp pinhole", "networkRules"],
+  ["show access", "wifiAccess"], ["show associations", "wifiMonitor"], ["show site-survey", "wifiMonitor"],
+  ["show processes", "diagnostics"], ["show threads", "diagnostics"], ["show system cpustat", "diagnostics"], ["show system zram", "diagnostics"],
+  ["show drivers", "diagnostics"], ["show self-test", "diagnostics"],
+  ["show running-config", "configuration"], ["show schedule", "general"], ["show snmp", "services"],
+  ["show dpn", "general"], ["show eula", "general"], ["show credits", "general"], ["show dns-proxy", "dhcp"],
+  ["show mws", "mws"], ["show ip hotspot", "dhcp"],
+  ["show led", "general"], ["show button", "general"], ["show clock", "general"],
   ["show easyconfig", "general"], ["show kabinet", "internet"],
 ];
 
 const SHOW_CATEGORY_OVERRIDES = new Map([
-  ["show acme", "internet"],
+  ["show acme", "remoteAccess"],
   ["show button", "general"],
   ["show clock date", "general"],
-  ["show cloud", "cloud"],
-  ["show cloud ndmp link", "cloud"],
-  ["show cloud ndmp status", "cloud"],
+  ["show cloud", "remoteAccess"],
+  ["show cloud ndmp link", "remoteAccess"],
+  ["show cloud ndmp status", "remoteAccess"],
   ["show components status", "general"],
   ["show configurator status", "general"],
   ["show device-list", "hosts"],
-  ["show drivers", "hardware"],
-  ["show dyndns", "networkRules"],
-  ["show dyndns report", "networkRules"],
+  ["show drivers", "diagnostics"],
+  ["show dyndns", "remoteAccess"],
+  ["show dyndns report", "remoteAccess"],
   ["show environment", "general"],
   ["show internet status", "internet"],
-  ["show ip arp", "networkRules"],
+  ["show ip arp", "hosts"],
   ["show ip conntrack", "internet"],
   ["show ip conntrack lockout", "internet"],
-  ["show ip http proxy", "networkRules"],
+  ["show ip http proxy", "remoteAccess"],
   ["show ip name-server", "dhcp"],
   ["show ip neighbour", "hosts"],
-  ["show ip rule", "security"],
+  ["show ip rule", "firewall"],
   ["show ip service", "services"],
   ["show ipset", "general"],
   ["show ipv6 conntrack", "ipv6"],
@@ -171,22 +202,30 @@ const SHOW_CATEGORY_OVERRIDES = new Map([
   ["show ipv6 subnets", "ipv6"],
   ["show last-change", "general"],
   ["show media", "usb"],
-  ["show ndns", "cloud"],
-  ["show ndss", "cloud"],
-  ["show netfilter", "internet"],
-  ["show ntce hosts", "qos"],
-  ["show ntce status", "qos"],
+  ["show ndns", "remoteAccess"],
+  ["show ndss", "remoteAccess"],
+  ["show netfilter", "firewall"],
+  ["show ntce hosts", "appTraffic"],
+  ["show ntce status", "appTraffic"],
   ["show ntp status", "system"],
-  ["show object-group fqdn", "networkRules"],
-  ["show oc-server", "domain"],
+  ["show object-group fqdn", "internetFilters"],
+  ["show oc-server", "remoteAccess"],
   ["show ping-check", "internet"],
-  ["show processes", "processes"],
+  ["show processes", "diagnostics"],
   ["show tags", "users"],
-  ["show threads", "processes"],
-  ["show upnp redirect", "internet"],
+  ["show threads", "diagnostics"],
+  ["show upnp redirect", "networkRules"],
   ["show usb", "usb"],
   ["show crypto map", "vpn"],
   ["show user", "users"],
+]);
+
+const SHOW_PRESENTATIONS = new Map([
+  ["show device-list", "devices"],
+  ["show ip neighbour", "neighbours"],
+  ["show ntce hosts", "traffic-hosts"],
+  ["show ip arp", "arp"],
+  ["show ip http proxy", "proxies"],
 ]);
 
 function extractShowSections(text) {
@@ -195,8 +234,8 @@ function extractShowSections(text) {
     ["show version", "show version", "system"],
     ["show identification", "show identification", "system"],
     ["show system", "show system", "system"],
-    ["show system cpustat", "Загрузка процессора", "processes", "cpustat"],
-    ["show associations", "Подключённые Wi‑Fi-устройства", "wifi", "associations"],
+    ["show system cpustat", "Загрузка процессора", "diagnostics", "cpustat"],
+    ["show associations", "Подключённые Wi‑Fi-устройства", "wifiMonitor", "associations"],
     ["show ip policy", "Политики маршрутизации", "routing", "ip-policy"],
     ["show ip route", "Маршруты IPv4", "routing", "ip-routes"],
     ["show ipv6 route", "Маршруты IPv6", "routing", "ipv6-routes"],
@@ -208,7 +247,7 @@ function extractShowSections(text) {
   ];
   const configured = definitions.map(([command, name, category, presentation]) => {
     const content = extractShowOutput(text, command);
-    return content ? { key: `derived:${category}:${command.replaceAll(" ", "-")}`, name, category, content, virtual: true, source: "show", presentation } : null;
+    return content ? { key: `derived:${category}:${command.replaceAll(" ", "-")}`, name, category, content, virtual: true, source: "show", presentation: presentation || (/^\s*<[\w:-]+[\s>]/.test(content) ? "xml-records" : undefined) } : null;
   }).filter(Boolean);
   const known = new Set(definitions.map(([command]) => command.toLowerCase()));
   const generic = [];
@@ -230,6 +269,7 @@ function extractShowSections(text) {
       content,
       virtual: true,
       source: "show",
+      presentation: SHOW_PRESENTATIONS.get(command.toLowerCase()) || (/^\s*<[\w:-]+[\s>]/.test(content) ? "xml-records" : undefined),
     });
   }
   return [...configured, ...generic];
@@ -364,17 +404,17 @@ export function searchDiagnostic(diagnostic, query) {
 function categoryFor(name) {
   const n = name.toLowerCase();
   if (n === "sys:kernel/debug/usb/devices") return "usb";
-  if (n === "ndm:log" || n.includes("mtdoops") || n.endsWith(".diag")) return "logs";
+  if (n === "ndm:log" || n.includes("mtdoops") || n.endsWith(".diag")) return "diagnostics";
   if (n.includes("wifi") || n.includes("wlan")) return "wifi";
   if (n === "proc:driver/hw_nat/foe/binds" || n === "proc:fastvpn/binds") return "internet";
   if (/xfrm|fastvpn|pppol2tp|ipsec|openvpn|wireguard/.test(n)) return "vpn";
-  if (/net\/dev|igmpsn|statistics/.test(n)) return "interfaces";
+  if (/net\/dev|igmpsn|statistics|traffic/.test(n)) return "traffic";
   if (/resolv|hosts/.test(n)) return "dhcp";
-  if (/meminfo|vmstat|vmalloc|zoneinfo|slabinfo|swaps/.test(n)) return "memory";
-  if (/modules|interrupts|loadavg/.test(n)) return "processes";
-  if (/driver|kernel\/debug|usb|switch|mtd/.test(n)) return "hardware";
+  if (/meminfo|vmstat|vmalloc|zoneinfo|slabinfo|swaps/.test(n)) return "diagnostics";
+  if (/modules|interrupts|loadavg/.test(n)) return "diagnostics";
+  if (/driver|kernel\/debug|usb|switch|mtd/.test(n)) return "diagnostics";
   if (n.startsWith("temp:")) return "services";
-  if (n.startsWith("proc:") || n.startsWith("sys:")) return "processes";
+  if (n.startsWith("proc:") || n.startsWith("sys:")) return "diagnostics";
   if (n === "ndm:sharing-config") return "configuration";
   return "other";
 }
@@ -432,7 +472,7 @@ export function parseDiagnostic(filename, text) {
   sections.push(...extractServiceConfigurations(config));
   sections.push(...extractShowSections(text));
   const temperatures = extractTemperatures(text);
-  if (temperatures.length) sections.push({ key: "derived:temperatures", name: "Температура", category: "hardware", virtual: true, content: temperatures.map(sensor => `${temperatureDisplayName(sensor.id)}: ${sensor.value} °C`).join("\n") });
+  if (temperatures.length) sections.push({ key: "derived:temperatures", name: "Температура", category: "system", virtual: true, content: temperatures.map(sensor => `${temperatureDisplayName(sensor.id)}: ${sensor.value} °C`).join("\n") });
   for (const section of sections) {
     if (!section.sanitized) section.content = sanitizeRaw(section.content);
     delete section.sanitized;

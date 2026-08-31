@@ -50,7 +50,7 @@ test("BUG-077/078/083: новые прокручиваемые блоки дос
     await expect(pre).toHaveAttribute("role", "region");
   }
   await upload(page, "KN1811");
-  await page.click('[data-nav-category="logs"]');
+  await page.click('[data-nav-category="diagnostics"]');
   await page.locator("[data-section-key]", { hasText: "mtdoops/ndm" }).first().click();
   await page.locator("details.json-cell-details summary").first().click();
   const size = await page.evaluate(() => { const pre = document.querySelector("details.json-cell-details[open] pre"); const group = pre.closest(".json-group"); return { tab: pre.tabIndex, role: pre.getAttribute("role"), ratio: pre.getBoundingClientRect().width / group.getBoundingClientRect().width }; });
