@@ -11,7 +11,7 @@ const formatTimestamp = value => {
   const match = String(value).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1].slice(2)} ${match[4]}:${match[5]}:${match[6]} UTC` : value;
 };
-const wifiBandLabel = id => ({ WifiMaster0: "Wi‑Fi 2,4 ГГц", WifiMaster1: "Wi‑Fi 5 ГГц" })[id] || id;
+const wifiBandLabel = id => ({ WifiMaster0: "2.4 GHz", WifiMaster1: "5 GHz" })[id] || id;
 
 const NAV_GROUPS = [
   { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
@@ -191,6 +191,7 @@ function renderSectionButton(section) {
 function renderSectionDetail(section) {
   if (section.presentation === "associations") return renderAssociations(section);
   if (section.presentation === "json") return renderJsonSection(section);
+  if (["ip-policy", "ip-routes", "ipv6-routes", "dhcp-pools", "cpustat"].includes(section.presentation)) return renderStructuredXmlSection(section);
   return `<div class="section-detail">
     <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
     <pre class="code-view" tabindex="0" role="region" aria-label="Содержимое секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre>
@@ -238,6 +239,46 @@ function renderJsonSection(section) {
   const data = JSON.parse(section.content);
   const visualization = Array.isArray(data) ? renderJsonArray(data, "Объекты") : renderJsonObject(data);
   return `<div class="section-detail json-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление JSON</p>${visualization}<details class="json-raw"><summary>Исходный JSON</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный JSON секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
+}
+
+function parseXmlFragment(content) {
+  const document = new DOMParser().parseFromString(`<root>${content}</root>`, "application/xml");
+  return document.querySelector("parsererror") ? null : document.documentElement;
+}
+
+function directXmlValue(element, name) {
+  return [...element.children].find(child => child.tagName === name)?.textContent?.trim() || "—";
+}
+
+function renderDataTable(title, rows, columns) {
+  return `<section class="json-group json-collection"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${rows.length} ${plural(rows.length, "запись", "записи", "записей")}</span></div><div class="json-table-wrap" tabindex="0" role="region" aria-label="${escapeHtml(title)}"><table class="json-table"><thead><tr>${columns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(([key]) => `<td><code>${escapeHtml(row[key] ?? "—")}</code></td>`).join("")}</tr>`).join("")}</tbody></table></div></section>`;
+}
+
+function routeRows(root, routeTag) {
+  return [...root.getElementsByTagName(routeTag)].map(route => {
+    const table = route.parentElement.tagName.match(/^table_(\d+)$/)?.[1] || "—";
+    return { table, destination: directXmlValue(route, "destination"), gateway: directXmlValue(route, "gateway"), interface: directXmlValue(route, "interface"), metric: directXmlValue(route, "metric"), proto: directXmlValue(route, "proto"), flags: directXmlValue(route, "flags") };
+  });
+}
+
+function renderStructuredXmlSection(section) {
+  const root = parseXmlFragment(section.content);
+  let visualization = `<div class="empty-results">Не удалось разобрать структурированные данные.</div>`;
+  if (root && section.presentation === "ip-policy") {
+    const rows = [...root.getElementsByTagName("policy")].flatMap(policy => [...policy.getElementsByTagName("route"), ...policy.getElementsByTagName("route6")].map(route => ({ policy: policy.getAttribute("name") || "—", description: policy.getAttribute("description") || "—", family: route.tagName === "route6" ? "IPv6" : "IPv4", destination: directXmlValue(route, "destination"), gateway: directXmlValue(route, "gateway"), interface: directXmlValue(route, "interface"), metric: directXmlValue(route, "metric") })));
+    visualization = renderDataTable("Маршруты по политикам", rows, [["policy", "Политика"], ["description", "Описание"], ["family", "Протокол"], ["destination", "Назначение"], ["gateway", "Шлюз"], ["interface", "Интерфейс"], ["metric", "Метрика"]]);
+  } else if (root && ["ip-routes", "ipv6-routes"].includes(section.presentation)) {
+    const rows = routeRows(root, section.presentation === "ipv6-routes" ? "route6" : "route");
+    visualization = renderDataTable(section.presentation === "ipv6-routes" ? "Таблица маршрутов IPv6" : "Таблица маршрутов IPv4", rows, [["table", "Таблица"], ["destination", "Назначение"], ["gateway", "Шлюз"], ["interface", "Интерфейс"], ["metric", "Метрика"], ["proto", "Источник"], ["flags", "Флаги"]]);
+  } else if (root && section.presentation === "dhcp-pools") {
+    const rows = [...root.getElementsByTagName("pool")].map(pool => ({ name: pool.getAttribute("name") || "—", interface: directXmlValue(pool, "interface"), network: directXmlValue(pool, "network"), range: `${directXmlValue(pool, "begin")} — ${directXmlValue(pool, "end")}`, router: directXmlValue(pool, "router"), usage: `${directXmlValue(pool, "used")} / ${directXmlValue(pool, "size")}`, lease: directXmlValue(pool, "lease"), state: directXmlValue(pool, "state") }));
+    visualization = renderDataTable("Пулы адресов", rows, [["name", "Пул"], ["interface", "Интерфейс"], ["network", "Сеть"], ["range", "Диапазон"], ["router", "Шлюз"], ["usage", "Занято / всего"], ["lease", "Аренда, с"], ["state", "Состояние"]]);
+  } else if (root && section.presentation === "cpustat") {
+    const interval = directXmlValue(root, "interval");
+    const rows = [...root.children].filter(item => item.tagName !== "interval").map(item => ({ metric: ({ busy: "Занято", user: "Пользователь", nice: "Nice", system: "Система", iowait: "Ожидание I/O", irq: "IRQ", sirq: "Soft IRQ" })[item.tagName] || item.tagName, current: directXmlValue(item, "cur"), average: directXmlValue(item, "avg"), minimum: directXmlValue(item, "min"), maximum: directXmlValue(item, "max") }));
+    visualization = `<p class="json-summary">Интервал измерения: ${escapeHtml(interval)} с</p>${renderDataTable("Загрузка CPU, %", rows, [["metric", "Показатель"], ["current", "Сейчас"], ["average", "Среднее"], ["minimum", "Минимум"], ["maximum", "Максимум"]])}`;
+  }
+  return `<div class="section-detail structured-xml-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление XML</p>${visualization}<details class="json-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
 }
 
 function xmlField(fragment, name) {

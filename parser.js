@@ -92,7 +92,7 @@ export function extractTemperatures(text) {
 }
 
 function temperatureDisplayName(id) {
-  return ({ WifiMaster0: "Wi‑Fi 2,4 ГГц", WifiMaster1: "Wi‑Fi 5 ГГц" })[id] || id;
+  return ({ WifiMaster0: "2.4 GHz", WifiMaster1: "5 GHz" })[id] || id;
 }
 
 function isStructuredJson(content) {
@@ -170,6 +170,8 @@ const SHOW_CATEGORY_OVERRIDES = new Map([
   ["show threads", "processes"],
   ["show upnp redirect", "internet"],
   ["show usb", "usb"],
+  ["show crypto map", "vpn"],
+  ["show user", "users"],
 ]);
 
 function extractShowSections(text) {
@@ -178,8 +180,12 @@ function extractShowSections(text) {
     ["show version", "show version", "system"],
     ["show identification", "show identification", "system"],
     ["show system", "show system", "system"],
-    ["show system cpustat", "show system cpustat", "processes"],
+    ["show system cpustat", "Загрузка процессора", "processes", "cpustat"],
     ["show associations", "Подключённые Wi‑Fi-устройства", "wifi", "associations"],
+    ["show ip policy", "Политики маршрутизации", "routing", "ip-policy"],
+    ["show ip route", "Маршруты IPv4", "routing", "ip-routes"],
+    ["show ipv6 route", "Маршруты IPv6", "routing", "ipv6-routes"],
+    ["show ip dhcp pool", "Пулы DHCP", "dhcp", "dhcp-pools"],
     ["show ip hotspot", "show ip hotspot", "dhcp"],
     ["show ip dhcp bindings", "show ip dhcp bindings", "dhcp"],
     ["show mws associations", "MWS: подключения", "mws"],
@@ -330,6 +336,7 @@ export function searchDiagnostic(diagnostic, query) {
 
 function categoryFor(name) {
   const n = name.toLowerCase();
+  if (n === "sys:kernel/debug/usb/devices") return "usb";
   if (n === "ndm:log" || n.includes("mtdoops") || n.endsWith(".diag")) return "logs";
   if (n.includes("wifi") || n.includes("wlan")) return "wifi";
   if (n === "proc:driver/hw_nat/foe/binds" || n === "proc:fastvpn/binds") return "internet";

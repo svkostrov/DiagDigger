@@ -72,7 +72,8 @@ interface WifiMaster0/AccessPoint0
   assert.deepEqual(extractTemperatures(xml), [{ id: "WifiMaster0", value: 71 }]);
   const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml);
   const temperatureSection = diagnostic.sections.find(section => section.key === "derived:temperatures");
-  assert.match(temperatureSection.content, /Wi‑Fi 2,4 ГГц: 71 °C/);
+  assert.match(temperatureSection.content, /2\.4 GHz: 71 °C/);
+  assert.doesNotMatch(temperatureSection.content, /WifiMaster/);
   assert.equal(diagnostic.meta.maxTemperature, 71);
   assert.equal(diagnostic.semantic.find(item => item.key.startsWith("wifi:2,4 ГГц")).fields["Температура"], "71 °C");
   assert.equal(searchDiagnostic(diagnostic, "Температура").length, 1);
@@ -144,6 +145,27 @@ test("show associations получает специальное представ
   const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><!-- show associations --><station><mac>00:11:22:33:44:55</mac></station></selftest>`;
   const section = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.find(item => item.key === "derived:wifi:show-associations");
   assert.equal(section.presentation, "associations");
+});
+
+test("маршруты, политики, DHCP и CPU получают структурированные представления", () => {
+  const commands = {
+    "show ip policy": "ip-policy", "show ip route": "ip-routes", "show ipv6 route": "ipv6-routes",
+    "show ip dhcp pool": "dhcp-pools", "show system cpustat": "cpustat",
+  };
+  const output = Object.keys(commands).map(command => `<!-- ${command} --><item><value>1</value></item>`).join("");
+  const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", `<selftest><file name="ndm:sharing-config">hostname Test</file>${output}</selftest>`);
+  for (const [command, presentation] of Object.entries(commands)) {
+    const section = diagnostic.sections.find(item => item.presentation === presentation);
+    assert.ok(section, `${command}: специальное представление не создано`);
+  }
+});
+
+test("crypto map, пользователи и USB debug-файл перенесены в заданные разделы", () => {
+  const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><file name="sys:kernel/debug/usb/devices">usb data</file><!-- show crypto map --><map>1</map><!-- show user --><users><user>admin</user></users></selftest>`;
+  const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml);
+  assert.equal(diagnostic.sections.find(item => item.name === "show crypto map").category, "vpn");
+  assert.equal(diagnostic.sections.find(item => item.name === "show user").category, "users");
+  assert.equal(diagnostic.sections.find(item => item.name === "sys:kernel/debug/usb/devices").category, "usb");
 });
 
 test("валидный JSON получает структурированное представление", () => {

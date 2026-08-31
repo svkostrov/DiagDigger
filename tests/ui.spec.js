@@ -92,8 +92,8 @@ test("сводка показывает release, диапазоны Wi‑Fi и �
   await upload(page, KN1811);
   const firmware = page.locator(".meta-grid div").filter({ has: page.getByText("Прошивка", { exact: true }) });
   await expect(firmware.locator("b")).toHaveText("5.01.C.4.0-1");
-  await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 2,4 ГГц · 71 °C");
-  await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 5 ГГц · 64 °C");
+  await expect(page.locator(".temperature-meta")).toContainText("2.4 GHz · 71 °C");
+  await expect(page.locator(".temperature-meta")).toContainText("5 GHz · 64 °C");
   await expect(page.locator(".temperature-meta")).not.toContainText("WifiMaster");
   const [uploadBox, themeBox] = await Promise.all([page.locator("#headerUpload").boundingBox(), page.locator(".theme-control").boundingBox()]);
   expect(themeBox.height).toBeGreaterThan(uploadBox.height);
@@ -201,6 +201,22 @@ test("перенесённые show-команды видны в новых ра
   await expect(page.locator(".category-card .section-list")).toContainText("show cloud ndmp status");
   await page.click("[data-nav-category='general']");
   await expect(page.locator(".category-card .section-list")).toContainText("show configurator status");
+});
+
+test("маршруты, политики, DHCP и CPU отображаются понятными таблицами", async ({ page }) => {
+  await upload(page, KN1811);
+  const sections = [
+    ["routing", "Политики маршрутизации"], ["routing", "Маршруты IPv4"], ["routing", "Маршруты IPv6"],
+    ["dhcp", "Пулы DHCP"], ["processes", "Загрузка процессора"],
+  ];
+  for (const [category, name] of sections) {
+    await page.click(`[data-nav-category='${category}']`);
+    await page.locator(".section-list button", { hasText: name }).click();
+    await expect(page.locator(".structured-xml-section .json-table")).toBeVisible();
+    await expect(page.locator(".structured-xml-section .json-table-wrap")).toHaveAttribute("tabindex", "0");
+    await expect(page.locator(".structured-xml-section .json-raw summary")).toHaveText("Исходный XML");
+    await page.click("#backToCategories");
+  }
 });
 
 test("счётчики в меню совпадают с числом секций в категории", async ({ page }) => {
