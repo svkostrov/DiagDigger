@@ -95,8 +95,11 @@ test("сводка показывает release, диапазоны Wi‑Fi и �
   await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 2,4 ГГц · 71 °C");
   await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 5 ГГц · 64 °C");
   await expect(page.locator(".temperature-meta")).not.toContainText("WifiMaster");
-  const [uploadBox, themeBox] = await Promise.all([page.locator("#headerUpload").boundingBox(), page.locator("#themeSelect").boundingBox()]);
-  expect(uploadBox.height).toBeLessThanOrEqual(themeBox.height + 1);
+  const [uploadBox, themeBox] = await Promise.all([page.locator("#headerUpload").boundingBox(), page.locator(".theme-control").boundingBox()]);
+  expect(themeBox.height).toBeGreaterThan(uploadBox.height);
+  await expect(page.locator(".theme-control legend")).toHaveText("Стиль оформления");
+  await expect(page.locator("#themeSelect")).toHaveValue("auto");
+  await expect(page.locator("#themeSelect option:checked")).toHaveText("Автоматический");
 });
 
 test(
@@ -178,10 +181,26 @@ test("регрессия BUG-013: элемент удаления диагнос
 
 // ------------------------------------------------------------------ навигация
 
-test("меню скрывает категории, которых нет в диагностике", async ({ page }) => {
+test("меню показывает только категории, для которых есть данные", async ({ page }) => {
   await upload(page, NC1812);
-  await expect(page.locator("[data-nav-category='internet']")).toHaveCount(0);   // у ретранслятора нет WAN
+  await expect(page.locator("[data-nav-category='internet']")).toHaveCount(1);  // show-данные есть и у ретранслятора
   await expect(page.locator("[data-nav-category='wifi']")).toHaveCount(1);
+});
+
+test("перенесённые show-команды видны в новых разделах, а не в «Прочем»", async ({ page }) => {
+  await upload(page, KN1811);
+  for (const category of ["hosts", "networkRules", "cloud", "ipv6", "qos", "general", "users", "domain", "usb"]) {
+    await expect(page.locator(`[data-nav-category='${category}']`), category).toBeVisible();
+  }
+  await page.click("[data-nav-category='other']");
+  const otherText = await page.locator(".category-card .section-list").innerText();
+  for (const command of ["show acme", "show button", "show cloud", "show device-list", "show ipv6 prefixes", "show ntce status", "show usb"]) {
+    expect(otherText, command).not.toContain(command);
+  }
+  await page.click("[data-nav-category='cloud']");
+  await expect(page.locator(".category-card .section-list")).toContainText("show cloud ndmp status");
+  await page.click("[data-nav-category='general']");
+  await expect(page.locator(".category-card .section-list")).toContainText("show configurator status");
 });
 
 test("счётчики в меню совпадают с числом секций в категории", async ({ page }) => {

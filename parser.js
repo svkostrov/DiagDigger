@@ -1,21 +1,30 @@
 export const CATEGORY_INFO = {
   overview: { title: "Общие сведения", icon: "◫", order: 0 },
   system: { title: "Система", icon: "◈", order: 1 },
-  configuration: { title: "Полная конфигурация", icon: "⌘", order: 2 },
-  interfaces: { title: "Интерфейсы", icon: "⇆", order: 3 },
-  internet: { title: "Интернет", icon: "◎", order: 4 },
-  wifi: { title: "Wi‑Fi", icon: "⌁", order: 5 },
-  mws: { title: "MWS", icon: "⌘", order: 6 },
-  vpn: { title: "VPN и туннели", icon: "◇", order: 7 },
-  routing: { title: "Маршрутизация", icon: "↝", order: 8 },
-  dhcp: { title: "DHCP и DNS", icon: "≋", order: 9 },
-  security: { title: "Безопасность", icon: "⬡", order: 10 },
-  services: { title: "Сервисы", icon: "⚙", order: 11 },
-  logs: { title: "Логи", icon: "≡", order: 12 },
-  processes: { title: "Процессы и ядро", icon: "▦", order: 13 },
-  memory: { title: "Память", icon: "▤", order: 14 },
-  hardware: { title: "Оборудование", icon: "◆", order: 15 },
-  other: { title: "Прочее", icon: "•••", order: 16 },
+  hardware: { title: "Оборудование", icon: "◆", order: 2 },
+  processes: { title: "Процессы и ядро", icon: "▦", order: 3 },
+  memory: { title: "Память", icon: "▤", order: 4 },
+  internet: { title: "Интернет", icon: "◎", order: 5 },
+  vpn: { title: "VPN и туннели", icon: "◇", order: 6 },
+  interfaces: { title: "Интерфейсы", icon: "⇆", order: 7 },
+  wifi: { title: "Wi‑Fi", icon: "⌁", order: 8 },
+  mws: { title: "MWS", icon: "⌘", order: 9 },
+  hosts: { title: "Хосты", icon: "▧", order: 10 },
+  dhcp: { title: "DHCP и DNS", icon: "≋", order: 11 },
+  routing: { title: "Маршрутизация", icon: "↝", order: 12 },
+  networkRules: { title: "Сетевые правила", icon: "⌘", order: 13 },
+  cloud: { title: "Облако", icon: "☁", order: 14 },
+  ipv6: { title: "IPv6", icon: "6", order: 15 },
+  qos: { title: "QoS", icon: "≋", order: 16 },
+  security: { title: "Безопасность", icon: "⬡", order: 17 },
+  configuration: { title: "Полная конфигурация", icon: "⌘", order: 18 },
+  general: { title: "Общие настройки", icon: "⚙", order: 19 },
+  users: { title: "Пользователи", icon: "♙", order: 20 },
+  domain: { title: "Доменное имя", icon: "◎", order: 21 },
+  usb: { title: "USB", icon: "↯", order: 22 },
+  services: { title: "Сервисы", icon: "⚙", order: 23 },
+  logs: { title: "Логи", icon: "≡", order: 24 },
+  other: { title: "Прочее", icon: "•••", order: 25 },
 };
 
 const CONFIG_GROUPS = [
@@ -102,6 +111,8 @@ function extractShowOutput(text, command) {
 }
 
 function showCategory(command) {
+  const explicit = SHOW_CATEGORY_OVERRIDES.get(command.toLowerCase());
+  if (explicit) return explicit;
   if (/\b(wifi|wlan|association)/i.test(command)) return "wifi";
   if (/\bmws\b/i.test(command)) return "mws";
   if (/\b(vpn|tunnel|wireguard|openvpn|ipsec|l2tp|pptp|sstp|zerotier)\b/i.test(command)) return "vpn";
@@ -114,6 +125,52 @@ function showCategory(command) {
   if (/\b(version|system|identification|defaults)\b/i.test(command)) return "system";
   return "other";
 }
+
+const SHOW_CATEGORY_OVERRIDES = new Map([
+  ["show acme", "internet"],
+  ["show button", "general"],
+  ["show clock date", "general"],
+  ["show cloud", "cloud"],
+  ["show cloud ndmp link", "cloud"],
+  ["show cloud ndmp status", "cloud"],
+  ["show components status", "general"],
+  ["show configurator status", "general"],
+  ["show device-list", "hosts"],
+  ["show drivers", "hardware"],
+  ["show dyndns", "networkRules"],
+  ["show dyndns report", "networkRules"],
+  ["show environment", "general"],
+  ["show internet status", "internet"],
+  ["show ip arp", "networkRules"],
+  ["show ip conntrack", "internet"],
+  ["show ip conntrack lockout", "internet"],
+  ["show ip http proxy", "networkRules"],
+  ["show ip name-server", "dhcp"],
+  ["show ip neighbour", "hosts"],
+  ["show ip rule", "security"],
+  ["show ip service", "services"],
+  ["show ipset", "general"],
+  ["show ipv6 conntrack", "ipv6"],
+  ["show ipv6 netfilter", "ipv6"],
+  ["show ipv6 prefixes", "ipv6"],
+  ["show ipv6 subnets", "ipv6"],
+  ["show last-change", "general"],
+  ["show media", "usb"],
+  ["show ndns", "cloud"],
+  ["show ndss", "cloud"],
+  ["show netfilter", "internet"],
+  ["show ntce hosts", "qos"],
+  ["show ntce status", "qos"],
+  ["show ntp status", "system"],
+  ["show object-group fqdn", "networkRules"],
+  ["show oc-server", "domain"],
+  ["show ping-check", "internet"],
+  ["show processes", "processes"],
+  ["show tags", "users"],
+  ["show threads", "processes"],
+  ["show upnp redirect", "internet"],
+  ["show usb", "usb"],
+]);
 
 function extractShowSections(text) {
   const definitions = [
@@ -305,10 +362,15 @@ function splitConfig(content) {
     const definition = /^interface\s+/i.test(head) && (/^\s+ip global\s+/mi.test(body) || /^\s+description\s+.*broadband/mi.test(body))
       ? ["internet", "Интернет-подключения"]
       : CONFIG_GROUPS.find(([, , re]) => re.test(head));
-    const key = definition ? definition[1] : "Прочие настройки";
-    const category = definition ? definition[0] : "other";
-    if (!grouped.has(key)) grouped.set(key, { key: `config:${key}`, name: key, category, chunks: [] });
-    grouped.get(key).chunks.push(block.join("\n"));
+    const destinations = /^mws\s+vlan\b/i.test(head)
+      ? [["mws", "MWS VLAN"], ["wifi", "MWS VLAN"]]
+      : [definition || ["other", "Прочие настройки"]];
+    for (const [category, name] of destinations) {
+      const groupKey = `${category}:${name}`;
+      const sectionKey = destinations.length > 1 ? `config:${groupKey}` : `config:${name}`;
+      if (!grouped.has(groupKey)) grouped.set(groupKey, { key: sectionKey, name, category, chunks: [] });
+      grouped.get(groupKey).chunks.push(block.join("\n"));
+    }
   }
   return [...grouped.values()].map(group => ({ ...group, content: group.chunks.join("\n\n"), virtual: true, source: "config" }));
 }

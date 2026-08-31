@@ -16,9 +16,9 @@ const wifiBandLabel = id => ({ WifiMaster0: "Wi‑Fi 2,4 ГГц", WifiMaster1: "
 const NAV_GROUPS = [
   { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
   { title: "Интернет", icon: "◎", categories: ["internet", "vpn"] },
-  { title: "Мои сети и Wi‑Fi", icon: "⌁", categories: ["interfaces", "wifi", "mws", "dhcp"] },
-  { title: "Сетевые правила", icon: "⬡", categories: ["routing", "security"] },
-  { title: "Управление", icon: "⚙", categories: ["configuration", "services", "logs", "other"] },
+  { title: "Мои сети и Wi‑Fi", icon: "⌁", categories: ["interfaces", "wifi", "mws", "hosts", "dhcp"] },
+  { title: "Сетевые правила", icon: "⬡", categories: ["routing", "networkRules", "cloud", "ipv6", "qos", "security"] },
+  { title: "Управление", icon: "⚙", categories: ["configuration", "general", "users", "domain", "usb", "services", "logs", "other"] },
 ];
 
 const themeMedia = matchMedia("(prefers-color-scheme: dark)");
@@ -100,7 +100,7 @@ function focusHeading(selector) {
 function renderNavigation() {
   const file = state.files.find(item => item.id === state.activeId) || state.files[0];
   if (!file) return;
-  const groups = groupSections(file).filter(([key]) => key !== "internet" || file.meta.role !== "extender" || file.semantic.some(item => item.key.startsWith("internet:")));
+  const groups = groupSections(file);
   const sectionsByCategory = new Map(groups);
   if (state.activeCategory !== "all" && !groups.some(([key]) => key === state.activeCategory)) state.activeCategory = "all";
   $("#globalFileSelect").innerHTML = state.files.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === file.id ? "selected" : ""}>${escapeHtml(item.meta.device)} · ${escapeHtml(item.meta.model)} · ${escapeHtml(item.meta.version)}</option>`).join("");

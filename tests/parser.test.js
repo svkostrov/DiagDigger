@@ -103,6 +103,43 @@ mws wlan Home
   assert.ok(diagnostic.sections.some(section => section.key === "derived:mws:show-mws-controller"));
 });
 
+test("mws vlan дублируется в Wi‑Fi и MWS", () => {
+  const xml = `<selftest><file name="ndm:sharing-config"><![CDATA[mws vlan Guests
+    vlan 42
+    enable
+!]]></file></selftest>`;
+  const sections = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.filter(section => section.name === "MWS VLAN");
+  assert.deepEqual(sections.map(section => section.category).sort(), ["mws", "wifi"]);
+  assert.ok(sections.every(section => section.content.includes("mws vlan Guests")));
+});
+
+test("show-команды распределяются по запрошенным разделам", () => {
+  const routes = {
+    "show acme": "internet", "show button": "general", "show clock date": "general",
+    "show cloud": "cloud", "show cloud ndmp link": "cloud", "show cloud ndmp status": "cloud",
+    "show components status": "general", "show configurator status": "general", "show device-list": "hosts",
+    "show drivers": "hardware", "show dyndns": "networkRules", "show dyndns report": "networkRules",
+    "show environment": "general", "show internet status": "internet", "show ip arp": "networkRules",
+    "show ip conntrack": "internet", "show ip conntrack lockout": "internet", "show ip http proxy": "networkRules",
+    "show ip name-server": "dhcp", "show ip neighbour": "hosts", "show ip rule": "security",
+    "show ip service": "services", "show ipset": "general", "show ipv6 conntrack": "ipv6",
+    "show ipv6 netfilter": "ipv6", "show ipv6 prefixes": "ipv6", "show ipv6 subnets": "ipv6",
+    "show last-change": "general", "show media": "usb", "show ndns": "cloud", "show ndss": "cloud",
+    "show netfilter": "internet", "show ntce hosts": "qos", "show ntce status": "qos",
+    "show ntp status": "system", "show object-group fqdn": "networkRules", "show oc-server": "domain",
+    "show ping-check": "internet", "show processes": "processes", "show tags": "users",
+    "show threads": "processes", "show upnp redirect": "internet", "show usb": "usb",
+  };
+  const output = Object.keys(routes).map((command, index) => `<!-- ${command} --><result>${index}</result>`).join("");
+  const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", `<selftest><file name="ndm:sharing-config">hostname Test</file>${output}</selftest>`);
+  for (const [command, category] of Object.entries(routes)) {
+    const section = diagnostic.sections.find(item => item.name === command);
+    assert.ok(section, `${command}: секция не создана`);
+    assert.equal(section.category, category, command);
+    assert.notEqual(section.category, "other", `${command}: осталась в «Прочем»`);
+  }
+});
+
 test("show associations получает специальное представление", () => {
   const xml = `<selftest><file name="ndm:sharing-config">hostname Test</file><!-- show associations --><station><mac>00:11:22:33:44:55</mac></station></selftest>`;
   const section = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml).sections.find(item => item.key === "derived:wifi:show-associations");
