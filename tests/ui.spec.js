@@ -88,6 +88,17 @@ test("загрузка диагностики раскрывает рабочу�
   expect(problems).toEqual([]);
 });
 
+test("верхние группы используют значки Netcraze в заданном порядке", async ({ page }) => {
+  await upload(page, KN1811);
+  const groups = page.locator(".nav-group:not(.nav-tools) .nav-group-title");
+  await expect(groups).toHaveCount(5);
+  await expect(groups).toHaveText(["Статус", "Интернет", "Мои сети и Wi‑Fi", "Сетевые правила", "Управление"]);
+  await expect(groups.locator(".nav-group-icon svg")).toHaveCount(5);
+  for (const icon of await groups.locator(".nav-group-icon svg").all()) {
+    await expect(icon).toHaveAttribute("aria-hidden", "true");
+  }
+});
+
 test("сводка показывает release, диапазоны Wi‑Fi и компактные элементы шапки", async ({ page }) => {
   await upload(page, KN1811);
   const firmware = page.locator(".meta-grid div").filter({ has: page.getByText("Прошивка", { exact: true }) });

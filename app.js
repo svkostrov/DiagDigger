@@ -13,12 +13,20 @@ const formatTimestamp = value => {
 };
 const wifiBandLabel = id => ({ WifiMaster0: "2.4 GHz", WifiMaster1: "5 GHz" })[id] || id;
 
+const NAV_GROUP_ICONS = {
+  status: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>`,
+  internet: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.45 4 5.45 4 9s-1.4 6.55-4 9c-2.6-2.45-4-5.45-4-9s1.4-6.55 4-9z"/></svg>`,
+  networks: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5a13 13 0 0 1 17 0M6.8 13a8.2 8.2 0 0 1 10.4 0M10 16.3a3.3 3.3 0 0 1 4 0"/><circle cx="12" cy="19.2" r="1" fill="currentColor" stroke="none"/></svg>`,
+  rules: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 20 6v5.7c0 5.1-3.2 8.1-8 10-4.8-1.9-8-4.9-8-10V6z"/></svg>`,
+  management: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 1.3)"><path d="m9.7 2.8.7-1.3h3.2l.7 1.3 1.7.7 1.4-.4 2.2 2.2-.4 1.4.7 1.7 1.3.7v3.2l-1.3.7-.7 1.7.4 1.4-2.2 2.2-1.4-.4-1.7.7-.7 1.3h-3.2l-.7-1.3-1.7-.7-1.4.4-2.2-2.2.4-1.4-.7-1.7-1.3-.7V9.1l1.3-.7.7-1.7-.4-1.4 2.2-2.2 1.4.4z"/><circle cx="12" cy="10.7" r="3.2"/></g></svg>`,
+};
+
 const NAV_GROUPS = [
-  { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
-  { title: "Интернет", icon: "◎", categories: ["internet", "vpn"] },
-  { title: "Мои сети и Wi‑Fi", icon: "⌁", categories: ["interfaces", "wifi", "mws", "hosts", "dhcp"] },
-  { title: "Сетевые правила", icon: "⬡", categories: ["routing", "networkRules", "cloud", "ipv6", "qos", "security"] },
-  { title: "Управление", icon: "⚙", categories: ["configuration", "general", "users", "domain", "usb", "services", "logs", "other"] },
+  { title: "Статус", icon: "status", categories: ["system", "hardware", "processes", "memory"] },
+  { title: "Интернет", icon: "internet", categories: ["internet", "vpn"] },
+  { title: "Мои сети и Wi‑Fi", icon: "networks", categories: ["interfaces", "wifi", "mws", "hosts", "dhcp"] },
+  { title: "Сетевые правила", icon: "rules", categories: ["routing", "networkRules", "cloud", "ipv6", "qos", "security"] },
+  { title: "Управление", icon: "management", categories: ["configuration", "general", "users", "domain", "usb", "services", "logs", "other"] },
 ];
 
 const themeMedia = matchMedia("(prefers-color-scheme: dark)");
@@ -110,7 +118,7 @@ function renderNavigation() {
       const overviewActive = state.tab === "explore" && state.activeCategory === "all";
       const overview = index === 0 ? `<button data-nav-category="all" ${overviewActive ? 'aria-current="page"' : ""} aria-label="Обзор диагностики" title="Обзор диагностики" class="nav-subitem ${overviewActive ? "active" : ""}"><span class="nav-icon">⌂</span><span>Обзор диагностики</span><span class="nav-count">${file.sections.length}</span></button>` : "";
       const items = renderNavCategories(group.categories, sectionsByCategory);
-      return overview || items ? `<section class="nav-group"><div class="nav-group-title"><span class="nav-group-icon">${group.icon}</span><span>${group.title}</span></div>${overview}${items}</section>` : "";
+      return overview || items ? `<section class="nav-group"><div class="nav-group-title"><span class="nav-group-icon">${NAV_GROUP_ICONS[group.icon]}</span><span>${group.title}</span></div>${overview}${items}</section>` : "";
     }).join("")}
     <section class="nav-group nav-tools"><div class="nav-group-title"><span class="nav-group-icon">⇄</span><span>Инструменты</span></div><button data-nav-compare ${state.tab === "compare" ? 'aria-current="page"' : ""} aria-label="Сравнение диагностик" title="Сравнение диагностик" class="nav-subitem ${state.tab === "compare" ? "active" : ""}"><span class="nav-icon">⇄</span><span>Сравнение</span><span class="nav-count">${state.files.length}</span></button></section>`;
 }
