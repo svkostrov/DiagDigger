@@ -22,3 +22,4 @@ body{background:#141e2b;color:var(--ink)}.topbar{height:92px;padding:0 32px 0 46
 .semantic-group-head>span{background:#111b28;color:#b7c1cc}
 @media(min-width:1001px) and (max-width:1100px){.topbar{padding-inline:16px}}
 .category-nav .nav-subitem .nav-icon{color:#8fa5ba}.category-nav .nav-subitem.active .nav-icon,.category-nav .nav-subitem:hover .nav-icon{color:#b8eaff}.remove-file{width:30px;min-width:30px;flex:none}
+#headerUpload{height:32px;padding:0 11px;font-size:11px;white-space:nowrap}

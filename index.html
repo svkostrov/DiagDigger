@@ -22,24 +22,17 @@
   <body>
     <a class="skip-link" href="#exploreView">К содержимому</a>
     <header class="topbar">
-      <a class="brand" href="#" aria-label="DiagDigger, версия 1.3">
+      <a class="brand" href="#" aria-label="DiagDigger, версия 1.4">
         <span>DIAGDIGGER</span>
-        <small>SELF-TEST EXPLORER</small>
-        <span class="app-version" aria-label="Версия 1.3">v1.3</span>
+        <span class="app-version" aria-label="Версия 1.4">v1.4</span>
       </a>
       <div class="header-file-picker hidden" id="headerFilePicker"><label for="globalFileSelect">Диагностика</label><select id="globalFileSelect" aria-label="Выбранная диагностика"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
-      <div class="privacy"><span></span> Локальная обработка</div>
-      <div class="theme-control" role="group" aria-label="Тема оформления">
-        <button data-theme-choice="light" title="Светлая тема" aria-label="Светлая тема">☀</button>
-        <button data-theme-choice="auto" title="Системная тема" aria-label="Системная тема">A</button>
-        <button data-theme-choice="dark" title="Тёмная тема" aria-label="Тёмная тема">●</button>
-      </div>
+      <label class="theme-control" for="themeSelect"><span class="sr-only">Тема оформления</span><select id="themeSelect" aria-label="Тема оформления"><option value="auto">Тема: авто</option><option value="light">Светлая тема</option><option value="dark">Тёмная тема</option></select></label>
       <button class="button button-primary" id="headerUpload">Добавить файлы</button>
     </header>
 
     <main id="app">
       <section class="hero" id="emptyState">
-        <div class="eyebrow">Keenetic self-test explorer</div>
         <h1>Диагностика без поиска<br />по бесконечному файлу</h1>
         <p>Загрузите один или несколько self-test файлов. DiagDigger разложит содержимое по категориям и покажет различия.</p>
         <label class="dropzone" id="dropzone">
@@ -64,7 +57,6 @@
           <nav id="categoryNav" class="category-nav" aria-label="Категории диагностики"></nav>
           <div class="sidebar-foot">
             <button class="sidebar-upload" id="sideUpload"><span>＋</span> Добавить файлы</button>
-            <span class="local-note"><i class="privacy-dot"></i> Данные остаются локально</span>
           </div>
         </aside>
 

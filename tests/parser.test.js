@@ -72,13 +72,12 @@ interface WifiMaster0/AccessPoint0
   assert.deepEqual(extractTemperatures(xml), [{ id: "WifiMaster0", value: 71 }]);
   const diagnostic = parseDiagnostic("self-test_KN-1_testing_1_router_now.txt", xml);
   const temperatureSection = diagnostic.sections.find(section => section.key === "derived:temperatures");
-  assert.match(temperatureSection.content, /WifiMaster0: 71 °C/);
+  assert.match(temperatureSection.content, /Wi‑Fi 2,4 ГГц: 71 °C/);
   assert.equal(diagnostic.meta.maxTemperature, 71);
   assert.equal(diagnostic.semantic.find(item => item.key.startsWith("wifi:2,4 ГГц")).fields["Температура"], "71 °C");
   assert.equal(searchDiagnostic(diagnostic, "Температура").length, 1);
   const wifiHits = searchDiagnostic(diagnostic, "WifiMaster");
   assert.ok(wifiHits.length >= 3);
-  assert.ok(wifiHits.some(hit => hit.sectionType === "derived"));
   assert.ok(wifiHits.some(hit => hit.sectionType !== "derived"));
 });
 

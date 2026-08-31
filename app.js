@@ -11,6 +11,7 @@ const formatTimestamp = value => {
   const match = String(value).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1].slice(2)} ${match[4]}:${match[5]}:${match[6]} UTC` : value;
 };
+const wifiBandLabel = id => ({ WifiMaster0: "Wi‑Fi 2,4 ГГц", WifiMaster1: "Wi‑Fi 5 ГГц" })[id] || id;
 
 const NAV_GROUPS = [
   { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
@@ -27,10 +28,8 @@ function applyTheme(mode) {
   localStorage.setItem("diagdigger-theme", mode);
   document.documentElement.dataset.themeMode = mode;
   document.documentElement.dataset.theme = mode === "auto" ? (themeMedia.matches ? "dark" : "light") : mode;
-  document.querySelectorAll("[data-theme-choice]").forEach(button => {
-    const active = button.dataset.themeChoice === mode;
-    button.classList.toggle("active", active); button.setAttribute("aria-pressed", String(active));
-  });
+  const select = $("#themeSelect");
+  if (select) select.value = mode;
 }
 themeMedia.addEventListener("change", () => { if (themeMode === "auto") applyTheme("auto"); });
 applyTheme(themeMode);
@@ -140,11 +139,11 @@ function renderExplore() {
       <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h1>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h1><p>${escapeHtml(file.filename)}</p></div>
       <div class="meta-grid">
         <div><span>Устройство · HW ID</span><b>${escapeHtml(file.meta.device)} · ${escapeHtml(file.meta.hwId)}</b></div>
-        <div><span>Прошивка · релиз</span><b>${escapeHtml(file.meta.firmware)} · ${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
+        <div><span>Прошивка</span><b>${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
         <div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
         <div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
         <div><span>NDM exact</span><b>${escapeHtml(file.meta.ndmExact)}</b><small>${escapeHtml(file.meta.ndmCdate)}</small></div><div><span>BSP exact</span><b>${escapeHtml(file.meta.bspExact)}</b><small>${escapeHtml(file.meta.bspCdate)}</small></div>
-        ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(sensor.id)} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
+        ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(wifiBandLabel(sensor.id))} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
       </div>
     </div>
     <div class="search-wrap"><span>⌕</span><input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Поиск по секциям и содержимому…" aria-label="Поиск по секциям и содержимому" />${state.query ? `<button class="search-clear" id="clearSearch" aria-label="Очистить поиск" title="Очистить поиск">×</button>` : `<kbd>${platformHint}</kbd>`}</div>
@@ -328,7 +327,6 @@ function showAllCategory(key) {
 }
 
 document.addEventListener("click", event => {
-  const themeChoice = event.target.closest("[data-theme-choice]"); if (themeChoice) applyTheme(themeChoice.dataset.themeChoice);
   const upload = event.target.closest("#headerUpload,#sideUpload,#compareUpload"); if (upload) $("#fileInput").click();
   const tab = event.target.closest("[data-tab]"); if (tab) { state.tab = tab.dataset.tab; state.compareSection = null; document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab)); $("#exploreView").classList.toggle("hidden", state.tab !== "explore"); $("#compareView").classList.toggle("hidden", state.tab !== "compare"); render(); }
   const remove = event.target.closest("[data-remove-id]"); if (remove) {
@@ -354,6 +352,8 @@ document.addEventListener("click", event => {
   const compare = event.target.closest("[data-compare-key]"); if (compare) { state.compareSection = compare.dataset.compareKey; renderCompare(); focusHeading("#compareView .detail-toolbar h2"); }
   if (event.target.closest("#backToCompare")) { state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
 });
+
+$("#themeSelect").addEventListener("change", event => applyTheme(event.target.value));
 
 document.addEventListener("input", event => {
   if (event.target.id === "searchInput") {

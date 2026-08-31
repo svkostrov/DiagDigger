@@ -45,6 +45,10 @@ async function openCompare(page) {
   await expect(page.locator("#compareView")).toBeVisible();
 }
 
+async function setTheme(page, mode) {
+  await page.locator("#themeSelect").selectOption(mode);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/index.html");
 });
@@ -55,7 +59,9 @@ test("пустое состояние объясняет, что делать", 
   await expect(page.locator("#emptyState")).toBeVisible();
   await expect(page.locator("#workspace")).toBeHidden();
   await expect(page.locator("#dropzone")).toBeVisible();
-  await expect(page.getByText("Локальная обработка")).toBeVisible();
+  await expect(page.getByText("Keenetic self-test explorer", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Локальная обработка", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#themeSelect")).toBeVisible();
 });
 
 test("некорректный файл даёт понятное сообщение и не ломает интерфейс", async ({ page }) => {
@@ -80,6 +86,17 @@ test("загрузка диагностики раскрывает рабочу�
   await expect(page.locator("[data-nav-category='all']")).toContainText("Обзор диагностики");
   await expect(page.locator(".category-card").first()).toBeVisible();
   expect(problems).toEqual([]);
+});
+
+test("сводка показывает release, диапазоны Wi‑Fi и компактные элементы шапки", async ({ page }) => {
+  await upload(page, KN1811);
+  const firmware = page.locator(".meta-grid div").filter({ has: page.getByText("Прошивка", { exact: true }) });
+  await expect(firmware.locator("b")).toHaveText("5.01.C.4.0-1");
+  await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 2,4 ГГц · 71 °C");
+  await expect(page.locator(".temperature-meta")).toContainText("Wi‑Fi 5 ГГц · 64 °C");
+  await expect(page.locator(".temperature-meta")).not.toContainText("WifiMaster");
+  const [uploadBox, themeBox] = await Promise.all([page.locator("#headerUpload").boundingBox(), page.locator("#themeSelect").boundingBox()]);
+  expect(uploadBox.height).toBeLessThanOrEqual(themeBox.height + 1);
 });
 
 test(
@@ -279,16 +296,16 @@ test("регрессия BUG-010: курсор остаётся после вв�
 for (const mode of ["light", "dark"]) {
   test(`тема «${mode}» применяется и переживает перезагрузку`, async ({ page }) => {
     await upload(page, SMALL);
-    await page.click(`[data-theme-choice='${mode}']`);
+    await setTheme(page, mode);
     await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
-    await expect(page.locator(`[data-theme-choice='${mode}']`)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#themeSelect")).toHaveValue(mode);
   });
 }
 
 test("тема «auto» следует системной", async ({ page }) => {
-  await page.click("[data-theme-choice='auto']");
+  await setTheme(page, "auto");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "auto");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -299,7 +316,7 @@ test("тема «auto» следует системной", async ({ page }) => 
 test("контраст основного текста не ниже 4.5:1 в обеих темах", async ({ page }) => {
   await upload(page, SMALL);
   for (const mode of ["light", "dark"]) {
-    await page.click(`[data-theme-choice='${mode}']`);
+    await setTheme(page, mode);
     const ratio = await page.evaluate(() => {
       const target = document.querySelector(".category-card h3") || document.body;
       const luminance = color => {
@@ -498,7 +515,7 @@ test("регрессия BUG-015: тост сообщает об отказе б
 
 test("контраст мелких служебных подписей не ниже 4.5:1", async ({ page }) => {
   await upload(page, SMALL);
-  await page.click("[data-theme-choice='light']");
+  await setTheme(page, "light");
   const ratios = await page.evaluate(() => {
     const luminance = color => {
       const [r, g, b] = color.match(/[\d.]+/g).slice(0, 3).map(Number)
@@ -523,7 +540,7 @@ test("контраст мелких служебных подписей не н�
 
 test("отсутствующее значение в сравнении читаемо в тёмной теме", async ({ page }) => {
   await upload(page, KN1811, NC1812);
-  await page.click("[data-theme-choice='dark']");
+  await setTheme(page, "dark");
   await openCompare(page);
   await page.click("[data-filter='left-only']");
   await page.locator(".semantic-row").first().click();
@@ -535,7 +552,7 @@ test("отсутствующее значение в сравнении чита
 
 test("регрессия BUG-020: в тёмной теме используется тёмная плашка", async ({ page }) => {
   await upload(page, KN1811, NC1812);
-  await page.click("[data-theme-choice='dark']");
+  await setTheme(page, "dark");
   await openCompare(page);
   await page.click("[data-filter='left-only']");
   await page.locator(".semantic-row").first().click();
@@ -598,14 +615,14 @@ test("снимки экрана для UX-разбора", async ({ page }) => {
   fs.mkdirSync(shots, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: path.join(shots, "01-empty-dark.png") });
-  await page.click("[data-theme-choice='light']");
+  await setTheme(page, "light");
   await page.screenshot({ path: path.join(shots, "02-empty-light.png") });
-  await page.click("[data-theme-choice='dark']");
+  await setTheme(page, "dark");
   await upload(page, KN1811, NC1812);
   await page.screenshot({ path: path.join(shots, "03-overview-dark.png") });
-  await page.click("[data-theme-choice='light']");
+  await setTheme(page, "light");
   await page.screenshot({ path: path.join(shots, "04-overview-light.png") });
-  await page.click("[data-theme-choice='dark']");
+  await setTheme(page, "dark");
   await page.click("[data-nav-category='wifi']");
   await page.screenshot({ path: path.join(shots, "05-category.png") });
   await page.locator(".section-list > button").first().click();
@@ -738,12 +755,12 @@ test("регрессия BUG-029: подсветка не вложена", async
 
 // ------------------------------------------------------------ BUG-030 · контраст ниже AA
 
-const CONTRAST_TARGETS = ["#headerUpload", ".local-note", ".view-head p", ".meta-grid span", ".section-list button small"];
+const CONTRAST_TARGETS = ["#headerUpload", ".view-head p", ".meta-grid span", ".section-list button small"];
 
 test("BUG-030: служебный текст и главная кнопка не ниже 4.5:1 в обеих темах", async ({ page }) => {
   await upload(page, SMALL);
   for (const theme of ["dark", "light"]) {
-    await page.click(`[data-theme-choice='${theme}']`);
+    await setTheme(page, theme);
     for (const selector of CONTRAST_TARGETS) {
       const ratio = await contrast(page, selector);
       expect(ratio, `${theme} · ${selector}`).toBeGreaterThanOrEqual(4.5);
@@ -754,7 +771,7 @@ test("BUG-030: служебный текст и главная кнопка не
 test("регрессия BUG-030: акцентная кнопка и подписи контрастны", async ({ page }) => {
   await upload(page, SMALL);
   for (const theme of ["dark", "light"]) {
-    await page.click(`[data-theme-choice='${theme}']`);
+    await setTheme(page, theme);
     expect(await contrast(page, "#headerUpload"), theme).toBeGreaterThanOrEqual(4.5);
     expect(await contrast(page, ".section-list button small"), theme).toBeGreaterThanOrEqual(4.5);
   }
@@ -764,7 +781,7 @@ test("регрессия BUG-030: акцентная кнопка и подпи�
 
 test("BUG-031: отсутствующее значение читаемо и в светлой теме", async ({ page }) => {
   await upload(page, SMALL, NC1812);
-  await page.click("[data-theme-choice='light']");
+  await setTheme(page, "light");
   await openCompare(page);
   await page.click("[data-filter='left-only']");
   await page.locator(".semantic-row").first().click();
@@ -773,7 +790,7 @@ test("BUG-031: отсутствующее значение читаемо и в 
 
 test("регрессия BUG-031: «Нет» контрастно в светлой теме", async ({ page }) => {
   await upload(page, SMALL, NC1812);
-  await page.click("[data-theme-choice='light']");
+  await setTheme(page, "light");
   await openCompare(page);
   await page.click("[data-filter='left-only']");
   await page.locator(".semantic-row").first().click();
@@ -917,7 +934,7 @@ test("регрессия BUG-042: рабочий экран имеет h1 и с�
 
 test("BUG-043: у интерактивных элементов есть собственный стиль фокуса", async ({ page }) => {
   await upload(page, SMALL);
-  await page.click("[data-theme-choice='dark']");
+  await setTheme(page, "dark");
   const style = await page.evaluate(() => {
     const button = document.querySelector(".nav-subitem");
     button.focus();

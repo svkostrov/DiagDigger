@@ -12,10 +12,9 @@ test.beforeEach(async ({ page }) => {
   await page.setInputFiles("#fileInput", fixture("NC1812"));
 });
 
-test("BUG-061: кнопки темы не сжимаются на ширине 1024 px", async ({ page }) => {
+test("BUG-061: список темы не сжимается на ширине 1024 px", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  const widths = await page.locator("[data-theme-choice]").evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
-  expect(Math.min(...widths)).toBeGreaterThanOrEqual(24);
+  expect((await page.locator("#themeSelect").boundingBox()).width).toBeGreaterThanOrEqual(96);
 });
 
 test("BUG-072: сравнение помещается на ширине 1024 px", async ({ page }) => {
