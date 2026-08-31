@@ -108,6 +108,9 @@ test("сводка показывает release, диапазоны Wi‑Fi и �
   await expect(page.locator(".temperature-meta")).not.toContainText("WifiMaster");
   const [uploadBox, themeBox] = await Promise.all([page.locator("#headerUpload").boundingBox(), page.locator(".theme-control").boundingBox()]);
   expect(themeBox.height).toBeGreaterThan(uploadBox.height);
+  expect(themeBox.width).toBeGreaterThanOrEqual(300);
+  expect(themeBox.height).toBeGreaterThanOrEqual(38);
+  expect(themeBox.height).toBeLessThanOrEqual(44);
   await expect(page.locator(".theme-control legend")).toHaveText("Стиль оформления");
   await expect(page.locator("#themeSelect")).toHaveValue("auto");
   await expect(page.locator("#themeSelect option:checked")).toHaveText("Автоматический");
