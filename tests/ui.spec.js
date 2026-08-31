@@ -625,3 +625,365 @@ test("снимки экрана для UX-разбора", async ({ page }) => {
   await page.click("#backToCompare");
   await page.screenshot({ path: path.join(shots, "11-mobile.png") });
 });
+
+// ==================================================================
+// Регрессионные UI-проверки исправлений BUG-025 … BUG-045 из второго аудита.
+// ==================================================================
+
+/** Контраст текста элемента к первому непрозрачному фону предка. */
+async function contrast(page, selector) {
+  return page.evaluate(css => {
+    const target = document.querySelector(css);
+    if (!target) return null;
+    const luminance = color => {
+      const [r, g, b] = color.match(/[\d.]+/g).slice(0, 3).map(Number)
+        .map(v => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    let node = target, background = "rgba(0, 0, 0, 0)";
+    while (node && /rgba\(0, 0, 0, 0\)/.test(background)) {
+      background = getComputedStyle(node).backgroundColor; node = node.parentElement;
+    }
+    const a = luminance(getComputedStyle(target).color), b = luminance(background);
+    return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
+  }, selector);
+}
+
+/** Доступное имя элемента: aria-label, aria-labelledby или связанный <label>. */
+async function accessibleName(page, selector) {
+  return page.evaluate(css => {
+    const el = document.querySelector(css);
+    if (!el) return null;
+    const byId = el.getAttribute("aria-labelledby");
+    return el.getAttribute("aria-label")
+      || (byId && document.getElementById(byId)?.textContent?.trim())
+      || (el.id && document.querySelector(`label[for="${el.id}"]`)?.textContent?.trim())
+      || el.closest("label")?.textContent?.trim()
+      || el.getAttribute("title")
+      || "";
+  }, selector);
+}
+
+// ------------------------------------------------------------ BUG-025 · поиск без ограничения
+
+test("BUG-025: частый фрагмент не обрушивает страницу количеством результатов", async ({ page }) => {
+  await upload(page, SMALL);
+  const started = Date.now();
+  await page.fill("#searchInput", "e");
+  await page.waitForTimeout(900);
+  const nodes = await page.evaluate(() => document.querySelectorAll("#exploreView *").length);
+  expect(nodes, "результаты поиска должны быть ограничены").toBeLessThan(20000);
+  expect(Date.now() - started).toBeLessThan(3000);
+});
+
+test("регрессия BUG-025: запрос «e» ограничивает DOM", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "e");
+  await page.waitForTimeout(2000);
+  const info = await page.evaluate(() => ({
+    hits: document.querySelectorAll(".search-hit").length,
+    nodes: document.querySelectorAll("#exploreView *").length,
+  }));
+  expect(info.hits, `отрисовано ${info.hits} совпадений`).toBeLessThanOrEqual(1000);
+  expect(info.nodes).toBeLessThan(20000);
+});
+
+// ------------------------------------------------------------ BUG-028 · селекты без доступного имени
+
+test("BUG-028: у всех выпадающих списков есть доступное имя", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  expect(await accessibleName(page, "#globalFileSelect")).not.toBe("");
+  await openCompare(page);
+  expect(await accessibleName(page, "#leftSelect")).not.toBe("");
+  expect(await accessibleName(page, "#rightSelect")).not.toBe("");
+});
+
+test("регрессия BUG-028: три select подписаны", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  expect(await accessibleName(page, "#globalFileSelect")).not.toBe("");
+  await openCompare(page);
+  expect(await accessibleName(page, "#leftSelect")).not.toBe("");
+  expect(await accessibleName(page, "#rightSelect")).not.toBe("");
+});
+
+// ------------------------------------------------------------ BUG-029 · подсветка ломает разметку
+
+test("BUG-029: подсветка поиска не искажает текст и не вкладывает mark в mark", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "&");
+  await page.waitForTimeout(600);
+  const info = await page.evaluate(() => ({
+    nested: document.querySelectorAll(".search-hit mark mark").length,
+    text: document.querySelector(".search-hit pre")?.textContent || "",
+  }));
+  expect(info.nested, "вложенные <mark> — невалидная разметка").toBe(0);
+  expect(info.text, "HTML-сущности показаны как текст").not.toMatch(/&(lt|gt|quot|amp);/);
+});
+
+test("регрессия BUG-029: запрос «&» сохраняет исходный текст", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "&");
+  await page.waitForTimeout(600);
+  const text = await page.evaluate(() => document.querySelector(".search-hit pre")?.textContent || "");
+  expect(text).not.toMatch(/&(lt|gt|quot|amp);/);
+});
+
+test("регрессия BUG-029: подсветка не вложена", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "dhcp");
+  await page.waitForTimeout(600);
+  const nested = await page.evaluate(() => document.querySelectorAll(".search-hit mark mark").length);
+  expect(nested).toBe(0);
+});
+
+// ------------------------------------------------------------ BUG-030 · контраст ниже AA
+
+const CONTRAST_TARGETS = ["#headerUpload", ".local-note", ".view-head p", ".meta-grid span", ".section-list button small"];
+
+test("BUG-030: служебный текст и главная кнопка не ниже 4.5:1 в обеих темах", async ({ page }) => {
+  await upload(page, SMALL);
+  for (const theme of ["dark", "light"]) {
+    await page.click(`[data-theme-choice='${theme}']`);
+    for (const selector of CONTRAST_TARGETS) {
+      const ratio = await contrast(page, selector);
+      expect(ratio, `${theme} · ${selector}`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test("регрессия BUG-030: акцентная кнопка и подписи контрастны", async ({ page }) => {
+  await upload(page, SMALL);
+  for (const theme of ["dark", "light"]) {
+    await page.click(`[data-theme-choice='${theme}']`);
+    expect(await contrast(page, "#headerUpload"), theme).toBeGreaterThanOrEqual(4.5);
+    expect(await contrast(page, ".section-list button small"), theme).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+// ------------------------------------------------------------ BUG-031 · «Нет» в светлой теме
+
+test("BUG-031: отсутствующее значение читаемо и в светлой теме", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await page.click("[data-theme-choice='light']");
+  await openCompare(page);
+  await page.click("[data-filter='left-only']");
+  await page.locator(".semantic-row").first().click();
+  expect(await contrast(page, ".field-row code.missing")).toBeGreaterThanOrEqual(4.5);
+});
+
+test("регрессия BUG-031: «Нет» контрастно в светлой теме", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await page.click("[data-theme-choice='light']");
+  await openCompare(page);
+  await page.click("[data-filter='left-only']");
+  await page.locator(".semantic-row").first().click();
+  expect(await contrast(page, ".field-row code.missing")).toBeGreaterThanOrEqual(4.5);
+});
+
+// ------------------------------------------------------------ BUG-032 · прокрутка с клавиатуры
+
+test("BUG-032: прокручиваемое содержимое доступно с клавиатуры", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.click("[data-nav-category='all']");
+  await page.locator(".section-list > button").first().click();
+  const view = await page.evaluate(() => {
+    const pre = document.querySelector(".code-view");
+    return { scrollable: pre.scrollHeight > pre.clientHeight, tabIndex: pre.tabIndex };
+  });
+  expect(view.scrollable).toBe(true);
+  expect(view.tabIndex, "прокручиваемая область обязана получать фокус").toBeGreaterThanOrEqual(0);
+});
+
+test("регрессия BUG-032: .code-view и .diff-view получают фокус", async ({ page }) => {
+  await upload(page, KN1912_A, KN1912_B);
+  await page.click("[data-nav-category='all']");
+  await page.locator(".section-list > button").first().click();
+  expect(await page.evaluate(() => document.querySelector(".code-view").tabIndex)).toBeGreaterThanOrEqual(0);
+  await openCompare(page);
+  await page.click("[data-compare-mode='raw']");
+  await page.click("[data-filter='changed']");
+  await page.locator(".compare-row[data-compare-key]").first().click();
+  expect(await page.evaluate(() => document.querySelector(".diff-view").tabIndex)).toBeGreaterThanOrEqual(0);
+});
+
+// ------------------------------------------------------------ BUG-033 · 320 px
+
+test("BUG-033: на ширине 320 px нет горизонтальной прокрутки", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await upload(page, SMALL);
+  const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(size.scroll).toBeLessThanOrEqual(size.client);
+});
+
+test("регрессия BUG-033: шапка помещается на 320 px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await upload(page, SMALL);
+  const info = await page.evaluate(() => {
+    const client = document.documentElement.clientWidth;
+    const wide = [...document.querySelectorAll("body *")]
+      .filter(el => el.getBoundingClientRect().right > client + 1)
+      .map(el => String(el.className || el.tagName).slice(0, 30));
+    return { scroll: document.documentElement.scrollWidth, client, wide: wide.slice(0, 5) };
+  });
+  expect(info.scroll).toBeLessThanOrEqual(info.client);
+  expect(info.wide.length).toBe(0);
+});
+
+// ------------------------------------------------------------ BUG-038 · категория при активном поиске
+
+test("BUG-038: выбор категории при активном поиске согласован с заголовком", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "dhcp");
+  await page.waitForTimeout(400);
+  await page.click("[data-nav-category='memory']");
+  const view = await page.evaluate(() => ({
+    heading: document.querySelector(".view-head h1")?.textContent,
+    searchResults: !!document.querySelector(".search-results"),
+  }));
+  expect(view.searchResults && view.heading === "Память",
+    "заголовок называет категорию, а показаны результаты глобального поиска").toBe(false);
+});
+
+test("регрессия BUG-038: выбор категории очищает глобальный поиск", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.fill("#searchInput", "dhcp");
+  await page.waitForTimeout(400);
+  await page.click("[data-nav-category='memory']");
+  await expect(page.locator(".view-head h1")).toHaveText("Память");
+  await expect(page.locator(".search-results")).toHaveCount(0);
+});
+
+// ------------------------------------------------------------ BUG-040 · «N полей»
+
+test("BUG-040: число отличающихся полей согласовано с существительным", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  await page.click("[data-filter='changed']");
+  const labels = await page.locator(".semantic-result small").allInnerTexts();
+  expect(labels.every(label => !/(?<!1)1 полей$|[234] полей$/.test(label)), labels.join(", ")).toBe(true);
+});
+
+test("регрессия BUG-040: формы числа полей согласованы", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  await page.click("[data-filter='changed']");
+  const labels = await page.locator(".semantic-result small").allInnerTexts();
+  expect(labels.some(label => /(?<!1)1 полей$|[234] полей$/.test(label)), labels.join(", ")).toBe(false);
+});
+
+// ------------------------------------------------------------ BUG-041 · вкладки без aria
+
+test("BUG-041: активная вкладка помечена для скринридера", async ({ page }) => {
+  await upload(page, SMALL);
+  const marked = await page.evaluate(() => [...document.querySelectorAll(".tab")]
+    .filter(tab => tab.getAttribute("aria-current") || tab.getAttribute("aria-selected")).length);
+  expect(marked).toBeGreaterThan(0);
+});
+
+test("регрессия BUG-041: активная вкладка имеет aria-current", async ({ page }) => {
+  await upload(page, SMALL);
+  const tabs = await page.evaluate(() => [...document.querySelectorAll(".tab")]
+    .map(tab => ({ current: tab.getAttribute("aria-current"), selected: tab.getAttribute("aria-selected"), active: tab.classList.contains("active") })));
+  expect(tabs.some(tab => tab.active)).toBe(true);
+  expect(tabs.some(tab => tab.active && tab.current === "page")).toBe(true);
+});
+
+// ------------------------------------------------------------ BUG-042 · заголовок и обход навигации
+
+test("BUG-042: у рабочего экрана есть заголовок первого уровня и ссылка к содержимому", async ({ page }) => {
+  await upload(page, SMALL);
+  const info = await page.evaluate(() => ({
+    h1: [...document.querySelectorAll("h1")].filter(h => h.offsetParent).length,
+    skip: !!document.querySelector("a[href='#exploreView'],a.skip-link,[data-skip-link]"),
+    navButtonsBeforeContent: document.querySelectorAll("#categoryNav button").length,
+  }));
+  expect(info.h1, "первый видимый заголовок — h2").toBeGreaterThan(0);
+  expect(info.skip, `${info.navButtonsBeforeContent} кнопок навигации без возможности их пропустить`).toBe(true);
+});
+
+test("регрессия BUG-042: рабочий экран имеет h1 и ссылку-обход", async ({ page }) => {
+  await upload(page, SMALL);
+  const info = await page.evaluate(() => ({
+    h1: [...document.querySelectorAll("h1")].filter(h => h.offsetParent).length,
+    firstHeading: [...document.querySelectorAll("h1,h2,h3")].filter(h => h.offsetParent)[0]?.tagName,
+    skip: !!document.querySelector("a[href='#exploreView'],a.skip-link,[data-skip-link]"),
+  }));
+  expect(info.h1).toBeGreaterThan(0);
+  expect(info.firstHeading).toBe("H1");
+  expect(info.skip).toBe(true);
+});
+
+// ------------------------------------------------------------ BUG-043 · фокус и анимация
+
+test("BUG-043: у интерактивных элементов есть собственный стиль фокуса", async ({ page }) => {
+  await upload(page, SMALL);
+  await page.click("[data-theme-choice='dark']");
+  const style = await page.evaluate(() => {
+    const button = document.querySelector(".nav-subitem");
+    button.focus();
+    const computed = getComputedStyle(button);
+    return { outlineStyle: computed.outlineStyle, outlineWidth: computed.outlineWidth, boxShadow: computed.boxShadow };
+  });
+  const custom = style.boxShadow !== "none" || (style.outlineStyle !== "auto" && style.outlineStyle !== "none");
+  expect(custom, "фокус нарисован системным контуром браузера").toBe(true);
+});
+
+test("регрессия BUG-043: правила фокуса и reduced-motion присутствуют", async ({ page }) => {
+  await upload(page, SMALL);
+  const rules = await page.evaluate(() => {
+    let focus = 0, motion = 0;
+    for (const sheet of document.styleSheets) {
+      let list; try { list = sheet.cssRules; } catch { continue; }
+      for (const rule of list) {
+        if (rule.conditionText?.includes("prefers-reduced-motion")) motion++;
+        if (rule.selectorText?.includes(":focus")) focus++;
+      }
+    }
+    return { focus, motion };
+  });
+  expect(rules.focus).toBeGreaterThan(0);
+  expect(rules.motion).toBeGreaterThan(0);
+});
+
+// ------------------------------------------------------------ BUG-044 · сырой timestamp в селектах
+
+test("BUG-044: подписи в сравнении показывают дату, а не машинную метку", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  const labels = await page.locator("#leftSelect option").allInnerTexts();
+  expect(labels.every(label => !/\d{8}T\d{6}\.\d{3}Z/.test(label)), labels.join(" | ")).toBe(true);
+});
+
+test("регрессия BUG-044: машинной метки в списке нет", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  const labels = await page.locator("#leftSelect option").allInnerTexts();
+  expect(labels.some(label => /\d{8}T\d{6}\.\d{3}Z/.test(label)), labels.join(" | ")).toBe(false);
+});
+
+// ------------------------------------------------------------ BUG-045 · «только слева»: все поля жёлтые
+
+test("BUG-045: у объекта, которого нет справа, поля не помечаются как отличия", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  await page.click("[data-filter='left-only']");
+  await page.locator(".semantic-row").first().click();
+  const rows = await page.evaluate(() => {
+    const all = [...document.querySelectorAll(".field-row")];
+    return { total: all.length, changed: all.filter(row => row.classList.contains("changed")).length };
+  });
+  expect(rows.changed, "подсветка каждой строки не несёт информации").toBeLessThan(rows.total);
+});
+
+test("регрессия BUG-045: поля одностороннего объекта не все изменены", async ({ page }) => {
+  await upload(page, SMALL, NC1812);
+  await openCompare(page);
+  await page.click("[data-filter='left-only']");
+  await page.locator(".semantic-row").first().click();
+  const rows = await page.evaluate(() => {
+    const all = [...document.querySelectorAll(".field-row")];
+    return { total: all.length, changed: all.filter(row => row.classList.contains("changed")).length };
+  });
+  expect(rows.total).toBeGreaterThan(0);
+  expect(rows.changed).toBeLessThan(rows.total);
+});

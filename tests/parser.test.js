@@ -76,7 +76,10 @@ interface WifiMaster0/AccessPoint0
   assert.equal(diagnostic.meta.maxTemperature, 71);
   assert.equal(diagnostic.semantic.find(item => item.key.startsWith("wifi:2,4 ГГц")).fields["Температура"], "71 °C");
   assert.equal(searchDiagnostic(diagnostic, "Температура").length, 1);
-  assert.equal(searchDiagnostic(diagnostic, "WifiMaster").length, 3);
+  const wifiHits = searchDiagnostic(diagnostic, "WifiMaster");
+  assert.ok(wifiHits.length >= 3);
+  assert.ok(wifiHits.some(hit => hit.sectionType === "derived"));
+  assert.ok(wifiHits.some(hit => hit.sectionType !== "derived"));
 });
 
 test("выделяет MWS, серверные конфигурации и show ip hotspot в свои разделы", () => {

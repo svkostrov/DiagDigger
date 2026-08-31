@@ -3,8 +3,14 @@ import { CATEGORY_INFO, compareSections, compareSemantic, groupSections, lineDif
 const state = { files: [], activeId: null, activeSection: null, activeCategory: "all", query: "", tab: "explore", compareLeft: null, compareRight: null, compareFilter: "all", compareSection: null, compareMode: "semantic" };
 const $ = selector => document.querySelector(selector);
 const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
+const decodeDisplayEntities = value => String(value ?? "").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 const formatBytes = bytes => bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} МБ` : `${Math.round(bytes / 1024)} КБ`;
 const plural = (count, one, few, many) => count % 10 === 1 && count % 100 !== 11 ? one : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? few : many;
+const platformHint = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K";
+const formatTimestamp = value => {
+  const match = String(value).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+  return match ? `${match[3]}.${match[2]}.${match[1].slice(2)} ${match[4]}:${match[5]}:${match[6]} UTC` : value;
+};
 
 const NAV_GROUPS = [
   { title: "Статус", icon: "▦", categories: ["system", "hardware", "processes", "memory"] },
@@ -29,20 +35,28 @@ function applyTheme(mode) {
 themeMedia.addEventListener("change", () => { if (themeMode === "auto") applyTheme("auto"); });
 applyTheme(themeMode);
 
-function toast(message, error = false) {
-  const el = $("#toast"); el.textContent = message; el.classList.toggle("error", error); el.classList.remove("hidden");
+function toast(message, error = false, action = null) {
+  const el = $("#toast");
+  el.replaceChildren();
+  const text = document.createElement("span"); text.textContent = message; el.append(text);
+  if (action) {
+    const button = document.createElement("button"); button.type = "button"; button.textContent = action.label; button.addEventListener("click", action.callback, { once: true }); el.append(button);
+  }
+  el.classList.toggle("error", error); el.classList.remove("hidden");
   clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.add("hidden"), 3200);
 }
 
 async function loadFiles(fileList) {
+  const errors = [];
   for (const file of Array.from(fileList)) {
     try {
       const text = await file.text();
       const diagnostic = parseDiagnostic(file.name, text);
       if (state.files.some(item => item.filename === diagnostic.filename && item.size === diagnostic.size && item.text === diagnostic.text)) continue;
       state.files.push(diagnostic); state.activeId ||= diagnostic.id;
-    } catch (error) { toast(`${file.name}: ${error.message}`, true); }
+    } catch (error) { errors.push(`${file.name}: ${error.message}`); }
   }
+  if (errors.length) toast(errors.join("\n"), true);
   if (!state.files.length) return;
   state.compareLeft ||= state.files[0].id;
   if (!state.compareRight || (state.compareRight === state.compareLeft && state.files.length > 1)) {
@@ -58,13 +72,36 @@ function render() {
   $("#headerFilePicker").classList.toggle("hidden", !state.files.length);
   $("#compareBadge").textContent = state.files.length;
   renderNavigation();
+  document.querySelectorAll(".tab").forEach(tab => {
+    const active = tab.dataset.tab === state.tab;
+    tab.classList.toggle("active", active);
+    if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
+  });
   if (state.tab === "explore") renderExplore(); else renderCompare();
+  updateDocumentTitle();
+}
+
+function updateDocumentTitle() {
+  const file = state.files.find(item => item.id === state.activeId) || state.files[0];
+  if (!file) { document.title = "DiagDigger — разбор диагностик"; return; }
+  const section = file.sections.find(item => item.key === state.activeSection);
+  const view = state.tab === "compare" ? "Сравнение" : section?.name || (state.activeCategory === "all" ? "Обзор" : CATEGORY_INFO[state.activeCategory]?.title || "Обзор");
+  document.title = `${view} · ${file.meta.device} — DiagDigger`;
+}
+
+function focusHeading(selector) {
+  requestAnimationFrame(() => {
+    const heading = document.querySelector(selector);
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  });
 }
 
 function renderNavigation() {
   const file = state.files.find(item => item.id === state.activeId) || state.files[0];
   if (!file) return;
-  const groups = groupSections(file);
+  const groups = groupSections(file).filter(([key]) => key !== "internet" || file.meta.role !== "extender" || file.semantic.some(item => item.key.startsWith("internet:")));
   const sectionsByCategory = new Map(groups);
   if (state.activeCategory !== "all" && !groups.some(([key]) => key === state.activeCategory)) state.activeCategory = "all";
   $("#globalFileSelect").innerHTML = state.files.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === file.id ? "selected" : ""}>${escapeHtml(item.meta.device)} · ${escapeHtml(item.meta.model)} · ${escapeHtml(item.meta.version)}</option>`).join("");
@@ -100,7 +137,7 @@ function renderExplore() {
   const categoryInfo = state.activeCategory === "all" ? null : CATEGORY_INFO[state.activeCategory];
   $("#exploreView").innerHTML = `
     <div class="view-head">
-      <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h2>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h2><p>${escapeHtml(file.filename)}</p></div>
+      <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h1>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h1><p>${escapeHtml(file.filename)}</p></div>
       <div class="meta-grid">
         <div><span>Устройство · HW ID</span><b>${escapeHtml(file.meta.device)} · ${escapeHtml(file.meta.hwId)}</b></div>
         <div><span>Прошивка · релиз</span><b>${escapeHtml(file.meta.firmware)} · ${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
@@ -110,7 +147,7 @@ function renderExplore() {
         ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(sensor.id)} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
       </div>
     </div>
-    <div class="search-wrap"><span>⌕</span><input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Поиск по секциям и содержимому…" aria-label="Поиск по секциям и содержимому" />${state.query ? `<button class="search-clear" id="clearSearch" aria-label="Очистить поиск" title="Очистить поиск">×</button>` : ""}</div>
+    <div class="search-wrap"><span>⌕</span><input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Поиск по секциям и содержимому…" aria-label="Поиск по секциям и содержимому" />${state.query ? `<button class="search-clear" id="clearSearch" aria-label="Очистить поиск" title="Очистить поиск">×</button>` : `<kbd>${platformHint}</kbd>`}</div>
     ${selected ? renderSectionDetail(selected) : state.query.trim() ? renderSearchResults(file, state.query) : `
       <div class="category-grid ${state.activeCategory !== "all" ? "single" : ""}">
         ${groups.map(([key, sections]) => renderCategory(key, sections, state.query, state.activeCategory !== "all")).join("") || `<div class="empty-results">Ничего не найдено. Попробуйте изменить запрос.</div>`}
@@ -122,24 +159,24 @@ function renderSearchResults(file, query) {
   const grouped = hits.reduce((map, hit) => { if (!map.has(hit.section)) map.set(hit.section, []); map.get(hit.section).push(hit); return map; }, new Map());
   const sectionLink = name => file.sections.find(section => section.key === `raw:${name}` || section.name === name);
   return `<section class="search-results">
-    <div class="search-results-head"><div><span>Результаты поиска</span><h3>${hits.length} ${plural(hits.length, "упоминание", "упоминания", "упоминаний")} в ${grouped.size} ${plural(grouped.size, "разделе", "разделах", "разделах")}</h3></div><code>${escapeHtml(query)}</code></div>
+    <div class="search-results-head"><div><span>Результаты поиска</span><h2>${hits.truncated ? "Показаны первые " : ""}${hits.length} ${plural(hits.length, "упоминание", "упоминания", "упоминаний")} в ${grouped.size} ${plural(grouped.size, "разделе", "разделах", "разделах")}</h2>${hits.truncated ? `<p>Выдача ограничена. Уточните запрос, чтобы увидеть нужное совпадение.</p>` : ""}</div><code>${escapeHtml(query)}</code></div>
     ${hits.length ? [...grouped].map(([name, items]) => {
       const linked = sectionLink(name);
       return `<article class="search-result-group"><div class="search-result-group-head"><div><span>${items[0].sectionType === "file" ? "Секция диагностики" : items[0].sectionType === "interface" ? "XML-интерфейс" : items[0].sectionType === "derived" ? "Производные данные" : "XML диагностики"}</span><h3>${escapeHtml(name)}</h3></div><b>${items.length}</b>${linked ? `<button data-search-section="${escapeHtml(linked.key)}">Открыть секцию</button>` : ""}</div><div class="search-hit-list">${items.map(hit => renderSearchHit(hit, query)).join("")}</div></article>`;
-    }).join("") : `<div class="empty-results">Совпадений во всём файле диагностики нет.</div>`}
+    }).join("") : `<div class="empty-results">Совпадений во всём файле диагностики нет.<button type="button" id="emptySearchClear">Очистить поиск</button></div>`}
   </section>`;
 }
 
 function renderSearchHit(hit, query) {
   const location = [hit.line ? `строка файла ${hit.line}` : null, hit.sectionLine ? `строка раздела ${hit.sectionLine}` : null, `столбец ${hit.column}`].filter(Boolean).join(" · ");
-  return `<div class="search-hit"><div class="search-hit-location">${location}</div><pre>${hit.before ? `<span>${escapeHtml(hit.before)}</span>\n` : ""}<mark>${highlight(hit.text, query)}</mark>${hit.after ? `\n<span>${escapeHtml(hit.after)}</span>` : ""}</pre></div>`;
+  return `<div class="search-hit"><div class="search-hit-location">${location}</div><pre>${hit.before ? `<span>${escapeHtml(decodeDisplayEntities(hit.before))}</span>\n` : ""}${highlight(hit.text, query)}${hit.after ? `\n<span>${escapeHtml(decodeDisplayEntities(hit.after))}</span>` : ""}</pre></div>`;
 }
 
 function renderCategory(key, sections, query, expanded = false) {
   const info = CATEGORY_INFO[key];
   const limit = expanded ? sections.length : query ? 30 : 7;
   return `<article class="category-card">
-    <div class="category-head"><span class="category-icon">${info.icon}</span><div><h3>${info.title}</h3><small>${sections.length} ${plural(sections.length, "секция", "секции", "секций")}</small></div></div>
+    <div class="category-head"><span class="category-icon">${info.icon}</span><div><h2>${info.title}</h2><small>${sections.length} ${plural(sections.length, "секция", "секции", "секций")}</small></div></div>
     <div class="section-list">${sections.slice(0, limit).map(renderSectionButton).join("")}</div>
     ${sections.length > limit ? `<button class="show-more" data-category="${key}">Ещё ${sections.length - limit}</button>` : ""}
   </article>`;
@@ -154,8 +191,8 @@ function renderSectionButton(section) {
 function renderSectionDetail(section) {
   if (section.presentation === "associations") return renderAssociations(section);
   return `<div class="section-detail">
-    <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h3>${escapeHtml(section.name)}</h3></div><button class="copy-button" id="copySection">Копировать</button></div>
-    <pre class="code-view"><code>${highlight(section.content, state.query)}</code></pre>
+    <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
+    <pre class="code-view" tabindex="0" role="region" aria-label="Содержимое секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre>
   </div>`;
 }
 
@@ -180,7 +217,7 @@ function formatUptime(value) {
 
 function renderAssociations(section) {
   const stations = [...section.content.matchAll(/<station>\s*([\s\S]*?)\s*<\/station>/gi)].map(match => match[1]);
-  return `<div class="section-detail wifi-associations"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>Wi‑Fi</span><h3>Подключённые устройства</h3></div><button class="copy-button" id="copySection">Копировать</button></div>
+  return `<div class="section-detail wifi-associations"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>Wi‑Fi</span><h2>Подключённые устройства</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
     <p class="association-summary">${stations.length} ${plural(stations.length, "устройство", "устройства", "устройств")} подключено к точкам доступа.</p>
     <div class="association-grid">${stations.map(station => {
       const authenticated = xmlField(station, "authenticated") === "yes";
@@ -189,15 +226,15 @@ function renderAssociations(section) {
 }
 
 function highlight(text, query) {
-  const safe = escapeHtml(text);
-  if (!query.trim()) return safe;
+  text = decodeDisplayEntities(text);
+  if (!query.trim()) return escapeHtml(text);
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return safe.replace(new RegExp(`(${escaped})`, "gi"), "<mark>$1</mark>");
+  return String(text).split(new RegExp(`(${escaped})`, "gi")).map((part, index) => index % 2 ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part)).join("");
 }
 
 function renderCompare() {
   if (state.files.length < 2) {
-    $("#compareView").innerHTML = `<div class="compare-empty"><div>⇄</div><h2>Добавьте второй файл</h2><p>Для сравнения нужны две диагностики.</p><button class="button button-primary" id="compareUpload">Добавить файл</button></div>`;
+    $("#compareView").innerHTML = `<div class="compare-empty"><div>⇄</div><h1>Добавьте второй файл</h1><p>Для сравнения нужны две диагностики.</p><button class="button button-primary" id="compareUpload">Добавить файл</button></div>`;
     return;
   }
   const left = state.files.find(f => f.id === state.compareLeft) || state.files[0];
@@ -220,7 +257,7 @@ function renderCompare() {
 }
 
 function renderCompareHeader(left, right) {
-  return `<div class="compare-head"><div><div class="eyebrow">Сравнение диагностик</div><h2>Что изменилось?</h2><div class="mode-switch"><button data-compare-mode="semantic" class="${state.compareMode === "semantic" ? "active" : ""}">Понятное сравнение</button><button data-compare-mode="raw" class="${state.compareMode === "raw" ? "active" : ""}">Сырые секции</button></div></div><div class="compare-selects">${renderSelect("leftSelect", left.id)}<span>⇄</span>${renderSelect("rightSelect", right.id)}</div></div>`;
+  return `<div class="compare-head"><div><div class="eyebrow">Сравнение диагностик</div><h1>Что изменилось?</h1><div class="mode-switch"><button data-compare-mode="semantic" class="${state.compareMode === "semantic" ? "active" : ""}">Понятное сравнение</button><button data-compare-mode="raw" class="${state.compareMode === "raw" ? "active" : ""}">Сырые секции</button></div></div><div class="compare-selects">${renderSelect("leftSelect", left.id, "Диагностика слева")}<span>⇄</span>${renderSelect("rightSelect", right.id, "Диагностика справа")}</div></div>`;
 }
 
 function renderSemanticCompare(left, right) {
@@ -237,7 +274,7 @@ function renderSemanticCompare(left, right) {
       <button data-filter="right-only" class="added ${state.compareFilter === "right-only" ? "active" : ""}"><b>${counts["right-only"]}</b><span>Есть только справа</span></button>
       <button data-filter="same" class="${state.compareFilter === "same" ? "active" : ""}"><b>${counts.same}</b><span>Полностью совпадают</span></button>
     </div>
-    ${selected ? renderSemanticDetail(selected, left, right) : `<div class="semantic-groups">${Object.entries(groups).map(([category, items]) => `<section class="semantic-group"><div class="semantic-group-head"><h3>${escapeHtml(category)}</h3><span>${items.length}</span></div><div class="semantic-list">${items.map(item => renderSemanticRow(item, left, right)).join("")}</div></section>`).join("") || `<div class="empty-results">В этой группе нет объектов.</div>`}</div>`}`;
+    ${selected ? renderSemanticDetail(selected, left, right) : `<div class="semantic-groups">${Object.entries(groups).map(([category, items]) => `<section class="semantic-group"><div class="semantic-group-head"><h2>${escapeHtml(category)}</h2><span>${items.length}</span></div><div class="semantic-list">${items.map(item => renderSemanticRow(item, left, right)).join("")}</div></section>`).join("") || `<div class="empty-results">В этой группе нет объектов.</div>`}</div>`}`;
 }
 
 function presence(item, side) {
@@ -250,19 +287,19 @@ function presence(item, side) {
 function renderSemanticRow(item, left, right) {
   const labels = { same: "Совпадает", changed: "Есть отличия", "left-only": `Только ${left.meta.device}`, "right-only": `Только ${right.meta.device}` };
   const changes = item.fields.filter(field => field.changed).length;
-  return `<button class="semantic-row" data-compare-key="${escapeHtml(item.key)}"><span class="semantic-icon">${item.icon}</span><span class="semantic-name"><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.subtitle)}</small></span><span class="semantic-side">${presence(item, "left")}</span><span class="semantic-arrow">→</span><span class="semantic-side">${presence(item, "right")}</span><span class="semantic-result ${item.status}">${escapeHtml(labels[item.status])}${changes && item.status === "changed" ? `<small>${changes} полей</small>` : ""}</span><span>›</span></button>`;
+  return `<button class="semantic-row" data-compare-key="${escapeHtml(item.key)}"><span class="semantic-icon">${item.icon}</span><span class="semantic-name"><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.subtitle)}</small></span><span class="semantic-side">${presence(item, "left")}</span><span class="semantic-arrow">→</span><span class="semantic-side">${presence(item, "right")}</span><span class="semantic-result ${item.status}">${escapeHtml(labels[item.status])}${changes && item.status === "changed" ? `<small>${changes} ${plural(changes, "поле", "поля", "полей")}</small>` : ""}</span><span>›</span></button>`;
 }
 
 function renderSemanticDetail(item, left, right) {
-  return `<div class="semantic-detail"><div class="detail-toolbar"><button class="back-button" id="backToCompare">← Все объекты</button><span class="semantic-icon">${item.icon}</span><div><span>${escapeHtml(item.category)}</span><h3>${escapeHtml(item.title)}</h3></div></div>
+  return `<div class="semantic-detail"><div class="detail-toolbar"><button class="back-button" id="backToCompare">← Все объекты</button><span class="semantic-icon">${item.icon}</span><div><span>${escapeHtml(item.category)}</span><h2>${escapeHtml(item.title)}</h2></div></div>
     <div class="semantic-device-head"><span>Параметр</span><b>${escapeHtml(left.meta.device)}<small>${escapeHtml(left.meta.model)}</small></b><b>${escapeHtml(right.meta.device)}<small>${escapeHtml(right.meta.model)}</small></b></div>
     <div class="field-comparison">${item.fields.map(field => `<div class="field-row ${field.changed ? "changed" : ""}"><span>${escapeHtml(field.name)}</span><code class="${!item.left ? "missing" : ""}">${escapeHtml(field.left)}</code><code class="${!item.right ? "missing" : ""}">${escapeHtml(field.right)}</code></div>`).join("")}</div>
     <details class="raw-details"><summary>Показать исходную конфигурацию</summary><div><pre>${escapeHtml(item.left?.raw || "Объект отсутствует")}</pre><pre>${escapeHtml(item.right?.raw || "Объект отсутствует")}</pre></div></details>
   </div>`;
 }
 
-function renderSelect(id, selected) {
-  return `<select id="${id}">${state.files.map(f => `<option value="${escapeHtml(f.id)}" ${f.id === selected ? "selected" : ""}>${escapeHtml(f.meta.device)} · ${escapeHtml(f.meta.version)} · ${escapeHtml(f.meta.timestamp)}</option>`).join("")}</select>`;
+function renderSelect(id, selected, label) {
+  return `<select id="${id}" aria-label="${label}">${state.files.map(f => `<option value="${escapeHtml(f.id)}" ${f.id === selected ? "selected" : ""}>${escapeHtml(f.meta.device)} · ${escapeHtml(f.meta.version)} · ${escapeHtml(formatTimestamp(f.meta.timestamp))}</option>`).join("")}</select>`;
 }
 
 function renderCompareRow(item) {
@@ -277,7 +314,7 @@ function renderDiff(item, left, right) {
     if (row.type !== "added") leftLine++; if (row.type !== "removed") rightLine++;
     return `<div class="diff-line ${row.type}"><span>${row.type === "added" ? "" : leftLine}</span><span>${row.type === "removed" ? "" : rightLine}</span><b>${row.type === "added" ? "+" : row.type === "removed" ? "−" : " "}</b><code>${escapeHtml(row.text) || " "}</code></div>`;
   }).join("");
-  return `<div class="diff-detail"><div class="detail-toolbar"><button class="back-button" id="backToCompare">← Все секции</button><div><span>${CATEGORY_INFO[item.category].title}</span><h3>${escapeHtml(item.name)}</h3></div><div class="diff-legend"><span class="removed">− ${escapeHtml(left.meta.device)}</span><span class="added">+ ${escapeHtml(right.meta.device)}</span></div></div><div class="diff-view">${rows}</div></div>`;
+  return `<div class="diff-detail"><div class="detail-toolbar"><button class="back-button" id="backToCompare">← Все секции</button><div><span>${CATEGORY_INFO[item.category].title}</span><h2>${escapeHtml(item.name)}</h2></div><div class="diff-legend"><span class="removed">− ${escapeHtml(left.meta.device)}</span><span class="added">+ ${escapeHtml(right.meta.device)}</span></div></div><div class="diff-view" tabindex="0" role="region" aria-label="Построчное сравнение секции ${escapeHtml(item.name)}">${rows}</div></div>`;
 }
 
 function showAllCategory(key) {
@@ -293,20 +330,28 @@ document.addEventListener("click", event => {
   const themeChoice = event.target.closest("[data-theme-choice]"); if (themeChoice) applyTheme(themeChoice.dataset.themeChoice);
   const upload = event.target.closest("#headerUpload,#sideUpload,#compareUpload"); if (upload) $("#fileInput").click();
   const tab = event.target.closest("[data-tab]"); if (tab) { state.tab = tab.dataset.tab; state.compareSection = null; document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab)); $("#exploreView").classList.toggle("hidden", state.tab !== "explore"); $("#compareView").classList.toggle("hidden", state.tab !== "compare"); render(); }
-  const remove = event.target.closest("[data-remove-id]"); if (remove) { event.stopPropagation(); state.files = state.files.filter(f => f.id !== remove.dataset.removeId); state.activeId = state.files[0]?.id; state.compareLeft = state.files[0]?.id; state.compareRight = state.files[1]?.id || state.files[0]?.id; render(); return; }
+  const remove = event.target.closest("[data-remove-id]"); if (remove) {
+    event.stopPropagation();
+    const index = state.files.findIndex(file => file.id === remove.dataset.removeId);
+    const removed = state.files[index];
+    if (!removed) return;
+    state.files.splice(index, 1); state.activeId = state.files[0]?.id; state.compareLeft = state.files[0]?.id; state.compareRight = state.files[1]?.id || state.files[0]?.id; render();
+    toast(`Диагностика ${removed.filename} удалена.`, false, { label: "Отменить", callback: () => { state.files.splice(index, 0, removed); state.activeId = removed.id; state.compareLeft ||= removed.id; state.compareRight ||= removed.id; render(); toast("Диагностика восстановлена"); } });
+    return;
+  }
   const fileCard = event.target.closest("[data-file-id]"); if (fileCard) { state.activeId = fileCard.dataset.fileId; state.activeSection = null; state.tab = "explore"; document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "explore")); $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); }
-  const navCategory = event.target.closest("[data-nav-category]"); if (navCategory) { state.activeCategory = navCategory.dataset.navCategory; state.activeSection = null; state.tab = "explore"; $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); }
-  if (event.target.closest("[data-nav-compare]")) { state.tab = "compare"; state.compareSection = null; $("#exploreView").classList.add("hidden"); $("#compareView").classList.remove("hidden"); render(); }
-  const section = event.target.closest("[data-section-key]"); if (section) { state.activeSection = section.dataset.sectionKey; renderExplore(); }
-  if (event.target.closest("#clearSearch")) { clearTimeout(state.searchTimer); state.query = ""; state.activeSection = null; renderExplore(); $("#searchInput")?.focus(); }
+  const navCategory = event.target.closest("[data-nav-category]"); if (navCategory) { state.activeCategory = navCategory.dataset.navCategory; state.activeSection = null; state.query = ""; state.tab = "explore"; $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); focusHeading("#exploreView h1"); }
+  if (event.target.closest("[data-nav-compare]")) { state.tab = "compare"; state.compareSection = null; $("#exploreView").classList.add("hidden"); $("#compareView").classList.remove("hidden"); render(); focusHeading("#compareView h1"); }
+  const section = event.target.closest("[data-section-key]"); if (section) { state.activeSection = section.dataset.sectionKey; renderExplore(); updateDocumentTitle(); focusHeading("#exploreView .section-detail h2"); }
+  if (event.target.closest("#clearSearch,#emptySearchClear")) { clearTimeout(state.searchTimer); state.query = ""; state.activeSection = null; renderExplore(); $("#searchInput")?.focus(); }
   const searchSection = event.target.closest("[data-search-section]"); if (searchSection) { const file = state.files.find(f => f.id === state.activeId); const found = file.sections.find(s => s.key === searchSection.dataset.searchSection); if (found) { state.activeCategory = found.category; state.activeSection = found.key; render(); } }
   const more = event.target.closest("[data-category]"); if (more) showAllCategory(more.dataset.category);
-  if (event.target.closest("#backToCategories")) { state.activeSection = null; renderExplore(); }
+  if (event.target.closest("#backToCategories")) { const previous = state.activeSection; state.activeSection = null; renderExplore(); requestAnimationFrame(() => document.querySelector(`[data-section-key="${CSS.escape(previous)}"]`)?.focus()); }
   if (event.target.closest("#copySection")) { const file = state.files.find(f => f.id === state.activeId); const sectionData = file.sections.find(s => s.key === state.activeSection); navigator.clipboard.writeText(sectionData.content).then(() => toast("Секция скопирована")).catch(() => toast("Не удалось скопировать секцию", true)); }
-  const filter = event.target.closest("[data-filter]"); if (filter) { state.compareFilter = filter.dataset.filter; state.compareSection = null; renderCompare(); }
-  const mode = event.target.closest("[data-compare-mode]"); if (mode) { state.compareMode = mode.dataset.compareMode; state.compareFilter = "all"; state.compareSection = null; renderCompare(); }
-  const compare = event.target.closest("[data-compare-key]"); if (compare) { state.compareSection = compare.dataset.compareKey; renderCompare(); }
-  if (event.target.closest("#backToCompare")) { state.compareSection = null; renderCompare(); }
+  const filter = event.target.closest("[data-filter]"); if (filter) { state.compareFilter = filter.dataset.filter; state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
+  const mode = event.target.closest("[data-compare-mode]"); if (mode) { state.compareMode = mode.dataset.compareMode; state.compareFilter = "all"; state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
+  const compare = event.target.closest("[data-compare-key]"); if (compare) { state.compareSection = compare.dataset.compareKey; renderCompare(); focusHeading("#compareView .detail-toolbar h2"); }
+  if (event.target.closest("#backToCompare")) { state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
 });
 
 document.addEventListener("input", event => {

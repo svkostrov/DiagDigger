@@ -20,12 +20,13 @@
     <link rel="stylesheet" href="./themes.css" />
   </head>
   <body>
+    <a class="skip-link" href="#exploreView">К содержимому</a>
     <header class="topbar">
       <a class="brand" href="#" aria-label="DiagDigger">
         <span>DIAGDIGGER</span>
         <small>SELF-TEST EXPLORER</small>
       </a>
-      <div class="header-file-picker hidden" id="headerFilePicker"><span>Диагностика</span><select id="globalFileSelect"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
+      <div class="header-file-picker hidden" id="headerFilePicker"><label for="globalFileSelect">Диагностика</label><select id="globalFileSelect" aria-label="Выбранная диагностика"></select><button class="remove-file" id="removeCurrentFile" aria-label="Убрать выбранную диагностику" title="Убрать выбранную диагностику">×</button></div>
       <div class="privacy"><span></span> Локальная обработка</div>
       <div class="theme-control" role="group" aria-label="Тема оформления">
         <button data-theme-choice="light" title="Светлая тема" aria-label="Светлая тема">☀</button>
