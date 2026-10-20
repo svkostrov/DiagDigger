@@ -101,8 +101,9 @@ test("верхние группы используют значки Netcraze в 
 
 test("сводка показывает release, диапазоны Wi‑Fi и компактные элементы шапки", async ({ page }) => {
   await upload(page, KN1811);
-  const firmware = page.locator(".meta-grid div").filter({ has: page.getByText("Прошивка", { exact: true }) });
+  const firmware = page.locator(".diagnostic-summary > span").filter({ hasText: "Прошивка" });
   await expect(firmware.locator("b")).toHaveText("5.01.C.4.0-1");
+  await page.locator(".diagnostic-details summary").click();
   await expect(page.locator(".temperature-meta")).toContainText("2.4 GHz · 71 °C");
   await expect(page.locator(".temperature-meta")).toContainText("5 GHz · 64 °C");
   await expect(page.locator(".temperature-meta")).not.toContainText("WifiMaster");
@@ -111,7 +112,7 @@ test("сводка показывает release, диапазоны Wi‑Fi и �
   expect(themeBox.width).toBeGreaterThanOrEqual(300);
   expect(themeBox.height).toBeGreaterThanOrEqual(38);
   expect(themeBox.height).toBeLessThanOrEqual(44);
-  await expect(page.locator(".theme-control legend")).toHaveText("Стиль оформления");
+  await expect(page.locator(".theme-control>span")).toHaveText("Стиль оформления");
   await expect(page.locator("#themeSelect")).toHaveValue("auto");
   await expect(page.locator("#themeSelect option:checked")).toHaveText("Автоматический");
 });

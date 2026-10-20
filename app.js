@@ -8,7 +8,7 @@ const formatBytes = bytes => bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} 
 const plural = (count, one, few, many) => count % 10 === 1 && count % 100 !== 11 ? one : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? few : many;
 const platformHint = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K";
 const formatTimestamp = value => {
-  const match = String(value).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+  const match = String(value).match(/^(\d{4})-?(\d{2})-?(\d{2})T(\d{2})[:-]?(\d{2})[:-]?(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1].slice(2)} ${match[4]}:${match[5]}:${match[6]} UTC` : value;
 };
 const wifiBandLabel = id => ({ WifiMaster0: "2.4 GHz", WifiMaster1: "5 GHz" })[id] || id;
@@ -63,9 +63,19 @@ function toast(message, error = false, action = null) {
   toast.timer = setTimeout(() => el.classList.add("hidden"), action ? 10_000 : 3200);
 }
 
+let loading = false;
 async function loadFiles(fileList) {
+  if (loading) { toast("Дождитесь завершения загрузки"); return; }
+  loading = true;
+  const progress = $("#loadProgress");
+  progress.classList.remove("hidden");
+  $("#app").setAttribute("aria-busy", "true");
   const errors = [];
-  for (const file of Array.from(fileList)) {
+  let completed = 0;
+  const files = Array.from(fileList);
+  for (const file of files) {
+    progress.textContent = `Разбор ${++completed} из ${files.length}: ${file.name}`;
+    await new Promise(resolve => setTimeout(resolve, 0));
     try {
       const text = await file.text();
       const diagnostic = parseDiagnostic(file.name, text);
@@ -73,6 +83,9 @@ async function loadFiles(fileList) {
       state.files.push(diagnostic); state.activeId ||= diagnostic.id;
     } catch (error) { errors.push(`${file.name}: ${error.message}`); }
   }
+  loading = false;
+  progress.classList.add("hidden");
+  $("#app").removeAttribute("aria-busy");
   if (errors.length) toast(errors.join("\n"), true);
   if (!state.files.length) return;
   state.compareLeft ||= state.files[0].id;
@@ -121,7 +134,7 @@ function renderNavigation() {
   const groups = groupSections(file);
   const sectionsByCategory = new Map(groups);
   if (state.activeCategory !== "all" && !groups.some(([key]) => key === state.activeCategory)) state.activeCategory = "all";
-  $("#globalFileSelect").innerHTML = state.files.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === file.id ? "selected" : ""}>${escapeHtml(item.meta.device)} · ${escapeHtml(item.meta.model)} · ${escapeHtml(item.meta.version)}</option>`).join("");
+  $("#globalFileSelect").innerHTML = state.files.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === file.id ? "selected" : ""}>${escapeHtml(item.meta.device)} · ${escapeHtml(item.meta.model)} · ${escapeHtml(item.meta.version)} · ${escapeHtml(formatTimestamp(item.meta.timestamp))}</option>`).join("");
   $("#removeCurrentFile").dataset.removeId = file.id;
   $("#categoryNav").innerHTML = `
     ${NAV_GROUPS.map((group, index) => {
@@ -155,15 +168,23 @@ function renderExplore() {
   $("#exploreView").innerHTML = `
     <div class="view-head">
       <div><div class="eyebrow">${escapeHtml(file.meta.model)} · ${escapeHtml(file.meta.device)}</div><h1>${categoryInfo ? escapeHtml(categoryInfo.title) : "Обзор диагностики"}</h1><p>${escapeHtml(file.filename)}</p></div>
+    </div>
+    <div class="diagnostic-summary">
+      <span>Прошивка <b>${escapeHtml(file.meta.release)}</b></span>
+      <span>Снята <b>${escapeHtml(formatTimestamp(file.meta.timestamp))}</b></span>
+      <span><b>${file.sections.length}</b> секций · ${formatBytes(file.size)}</span>
+    </div>
+    <details class="diagnostic-details"><summary>Сведения об устройстве и сборке</summary>
       <div class="meta-grid">
         <div><span>Устройство</span><b>${escapeHtml(file.meta.device)}</b></div>
-        <div><span>Прошивка</span><b>${escapeHtml(file.meta.release)}</b></div><div><span>Размер</span><b>${formatBytes(file.size)}</b></div>
         <div><span>Регион</span><b>${escapeHtml(file.meta.region)}</b></div>
         <div><span>Sandbox</span><b>${escapeHtml(file.meta.sandbox)}</b></div>
-        <div><span>NDM exact</span><b>${escapeHtml(file.meta.ndmExact)}</b><small>${escapeHtml(file.meta.ndmCdate)}</small></div><div><span>BSP exact</span><b>${escapeHtml(file.meta.bspExact)}</b><small>${escapeHtml(file.meta.bspCdate)}</small></div>
+        <div><span>NDM exact</span><b>${escapeHtml(file.meta.ndmExact)}</b><small>${escapeHtml(file.meta.ndmCdate)}</small></div>
+        <div><span>BSP exact</span><b>${escapeHtml(file.meta.bspExact)}</b><small>${escapeHtml(file.meta.bspCdate)}</small></div>
         ${file.meta.temperatures.length ? `<div class="temperature-meta"><span>Температуры</span>${file.meta.temperatures.map(sensor => `<b>${escapeHtml(wifiBandLabel(sensor.id))} · ${escapeHtml(sensor.value)} °C</b>`).join("")}</div>` : ""}
       </div>
-    </div>
+    </details>
+    <label class="category-jump">Перейти к разделу<select id="categoryJump">${[["all", "Обзор диагностики"], ...allGroups.map(([key]) => [key, CATEGORY_INFO[key].title])].map(([key, title]) => `<option value="${key}" ${state.activeCategory === key ? "selected" : ""}>${escapeHtml(title)}</option>`).join("")}</select></label>
     <div class="search-wrap"><span>⌕</span><input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Поиск по секциям и содержимому…" aria-label="Поиск по секциям и содержимому" />${state.query ? `<button class="search-clear" id="clearSearch" aria-label="Очистить поиск" title="Очистить поиск">×</button>` : `<kbd>${platformHint}</kbd>`}</div>
     ${selected ? renderSectionDetail(selected) : state.query.trim() ? renderSearchResults(file, state.query) : `
       <div class="category-grid ${state.activeCategory !== "all" ? "single" : ""}">
@@ -206,13 +227,18 @@ function renderSectionButton(section) {
   return `<button data-section-key="${escapeHtml(section.key)}" class="${isConfig ? "config-section" : ""}">${isConfig ? `<em>Настройка</em>` : ""}<span>${escapeHtml(section.name)}</span><small>${count} ${plural(count, "строка", "строки", "строк")}</small><b>›</b></button>`;
 }
 
+function renderBackButton() {
+  const label = state.query.trim() ? "К результатам поиска" : state.activeCategory === "all" ? "Все категории" : CATEGORY_INFO[state.activeCategory].title;
+  return `<button class="back-button" id="backToCategories">← ${escapeHtml(label)}</button>`;
+}
+
 function renderSectionDetail(section) {
   if (section.presentation === "associations") return renderAssociations(section);
   if (section.presentation === "json") return renderJsonSection(section);
   if (["devices", "neighbours", "traffic-hosts", "arp", "proxies", "xml-records"].includes(section.presentation)) return renderHumanXmlSection(section);
   if (["ip-policy", "ip-routes", "ipv6-routes", "dhcp-pools", "cpustat"].includes(section.presentation)) return renderStructuredXmlSection(section);
   return `<div class="section-detail">
-    <div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
+    <div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
     <pre class="code-view" tabindex="0" role="region" aria-label="Содержимое секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre>
   </div>`;
 }
@@ -257,7 +283,7 @@ function renderJsonObject(object, title = "") {
 function renderJsonSection(section) {
   const data = JSON.parse(section.content);
   const visualization = Array.isArray(data) ? renderJsonArray(data, "Объекты") : renderJsonObject(data);
-  return `<div class="section-detail json-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление JSON</p>${visualization}<details class="json-raw"><summary>Исходный JSON</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный JSON секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
+  return `<div class="section-detail json-section"><div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление JSON</p>${visualization}<details class="json-raw"><summary>Исходный JSON</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный JSON секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
 }
 
 function parseXmlFragment(content) {
@@ -381,7 +407,7 @@ function renderHumanXmlSection(section) {
   else if (section.presentation === "proxies") cards = records.filter(item => item.tagName === "proxy").map(renderProxyRecord);
   else cards = records.map(renderGenericXmlRecord);
   const label = cards.length ? `${cards.length} ${plural(cards.length, "запись", "записи", "записей")}` : "Структурированных записей нет";
-  return `<div class="section-detail human-xml-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><p class="association-summary">${label}. Данные представлены в удобном виде; исходный XML доступен ниже.</p><div class="association-grid record-grid">${cards.join("") || `<div class="empty-results">Не удалось выделить записи из этого XML.</div>`}</div><details class="json-raw human-xml-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div>`;
+  return `<div class="section-detail human-xml-section"><div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><p class="association-summary">${label}. Данные представлены в удобном виде; исходный XML доступен ниже.</p><div class="association-grid record-grid">${cards.join("") || `<div class="empty-results">Не удалось выделить записи из этого XML.</div>`}</div><details class="json-raw human-xml-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div>`;
 }
 
 function renderDataTable(title, rows, columns) {
@@ -412,7 +438,7 @@ function renderStructuredXmlSection(section) {
     const rows = [...root.children].filter(item => item.tagName !== "interval").map(item => ({ metric: ({ busy: "Занято", user: "Пользователь", nice: "Nice", system: "Система", iowait: "Ожидание I/O", irq: "IRQ", sirq: "Soft IRQ" })[item.tagName] || item.tagName, current: directXmlValue(item, "cur"), average: directXmlValue(item, "avg"), minimum: directXmlValue(item, "min"), maximum: directXmlValue(item, "max") }));
     visualization = `<p class="json-summary">Интервал измерения: ${escapeHtml(interval)} с</p>${renderDataTable("Загрузка CPU, %", rows, [["metric", "Показатель"], ["current", "Сейчас"], ["average", "Среднее"], ["minimum", "Минимум"], ["maximum", "Максимум"]])}`;
   }
-  return `<div class="section-detail structured-xml-section"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление XML</p>${visualization}<details class="json-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
+  return `<div class="section-detail structured-xml-section"><div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><div class="json-view"><p class="json-summary">Структурированное представление XML</p>${visualization}<details class="json-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div></div>`;
 }
 
 function xmlField(fragment, name) {
@@ -436,7 +462,7 @@ function formatUptime(value) {
 
 function renderAssociations(section) {
   const stations = [...section.content.matchAll(/<station>\s*([\s\S]*?)\s*<\/station>/gi)].map(match => match[1]);
-  return `<div class="section-detail wifi-associations"><div class="detail-toolbar"><button class="back-button" id="backToCategories">← Все категории</button><div><span>Wi‑Fi</span><h2>Подключённые устройства</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
+  return `<div class="section-detail wifi-associations"><div class="detail-toolbar">${renderBackButton()}<div><span>Wi‑Fi</span><h2>Подключённые устройства</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
     <p class="association-summary">${stations.length} ${plural(stations.length, "устройство", "устройства", "устройств")} подключено к точкам доступа.</p>
     <div class="association-grid">${stations.map(station => {
       const authenticated = xmlField(station, "authenticated") === "yes";
@@ -545,6 +571,23 @@ function showAllCategory(key) {
   card.querySelector(".show-more")?.remove();
 }
 
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(text); return; } catch {}
+  }
+  // LAN HTTP does not expose the Clipboard API in most browsers.
+  const previous = document.activeElement;
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("aria-label", "Текст для копирования");
+  field.style.cssText = "position:fixed;left:-9999px;top:0";
+  document.body.append(field);
+  try {
+    field.select();
+    if (!document.execCommand("copy")) throw new Error("Copy failed");
+  } finally { field.remove(); previous?.focus({ preventScroll: true }); }
+}
+
 document.addEventListener("click", event => {
   const brand = event.target.closest("a.brand"); if (brand) { event.preventDefault(); state.tab = "explore"; state.activeCategory = "all"; state.activeSection = null; state.query = ""; $("#exploreView").classList.remove("hidden"); $("#compareView").classList.add("hidden"); render(); focusHeading(state.files.length ? "#exploreView h1" : "#emptyState h1"); return; }
   const upload = event.target.closest("#headerUpload,#sideUpload,#compareUpload"); if (upload) $("#fileInput").click();
@@ -564,10 +607,10 @@ document.addEventListener("click", event => {
   if (event.target.closest("[data-nav-compare]")) { state.tab = "compare"; state.compareSection = null; $("#exploreView").classList.add("hidden"); $("#compareView").classList.remove("hidden"); render(); focusHeading("#compareView h1"); }
   const section = event.target.closest("[data-section-key]"); if (section) { state.activeSection = section.dataset.sectionKey; renderExplore(); updateDocumentTitle(); focusHeading("#exploreView .section-detail h2"); }
   if (event.target.closest("#clearSearch,#emptySearchClear")) { clearTimeout(state.searchTimer); state.query = ""; state.activeSection = null; renderExplore(); $("#searchInput")?.focus(); }
-  const searchSection = event.target.closest("[data-search-section]"); if (searchSection) { const file = state.files.find(f => f.id === state.activeId); const found = file.sections.find(s => s.key === searchSection.dataset.searchSection); if (found) { state.activeCategory = found.category; state.activeSection = found.key; render(); } }
+  const searchSection = event.target.closest("[data-search-section]"); if (searchSection) { const file = state.files.find(f => f.id === state.activeId); const found = file.sections.find(s => s.key === searchSection.dataset.searchSection); if (found) { state.activeCategory = found.category; state.activeSection = found.key; render(); focusHeading("#exploreView .section-detail h2"); } }
   const more = event.target.closest("[data-category]"); if (more) showAllCategory(more.dataset.category);
-  if (event.target.closest("#backToCategories")) { const previous = state.activeSection; state.activeSection = null; renderExplore(); requestAnimationFrame(() => document.querySelector(`[data-section-key="${CSS.escape(previous)}"]`)?.focus()); }
-  if (event.target.closest("#copySection")) { const file = state.files.find(f => f.id === state.activeId); const sectionData = file.sections.find(s => s.key === state.activeSection); navigator.clipboard.writeText(sectionData.content).then(() => toast("Секция скопирована")).catch(() => toast("Не удалось скопировать секцию", true)); }
+  if (event.target.closest("#backToCategories")) { const previous = state.activeSection; state.activeSection = null; renderExplore(); updateDocumentTitle(); requestAnimationFrame(() => (document.querySelector(`[data-${state.query.trim() ? "search-section" : "section-key"}="${CSS.escape(previous)}"]`) || $("#searchInput"))?.focus()); }
+  if (event.target.closest("#copySection")) { const file = state.files.find(f => f.id === state.activeId); const sectionData = file.sections.find(s => s.key === state.activeSection); copyText(sectionData.content).then(() => toast("Секция скопирована")).catch(() => toast("Не удалось скопировать секцию", true)); }
   const filter = event.target.closest("[data-filter]"); if (filter) { state.compareFilter = filter.dataset.filter; state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
   const mode = event.target.closest("[data-compare-mode]"); if (mode) { state.compareMode = mode.dataset.compareMode; state.compareFilter = "all"; state.compareSection = null; renderCompare(); focusHeading("#compareView h1"); }
   const compare = event.target.closest("[data-compare-key]"); if (compare) { state.compareSection = compare.dataset.compareKey; renderCompare(); focusHeading("#compareView .detail-toolbar h2"); }
@@ -585,6 +628,10 @@ document.addEventListener("input", event => {
 });
 
 document.addEventListener("change", event => {
+  if (event.target.id === "categoryJump") {
+    state.activeCategory = event.target.value; state.activeSection = null; state.query = "";
+    render(); focusHeading("#exploreView h1");
+  }
   if (event.target.id === "fileInput") { const files = Array.from(event.target.files); event.target.value = ""; loadFiles(files); }
   if (event.target.id === "globalFileSelect") { state.activeId = event.target.value; state.activeSection = null; render(); }
   if (event.target.id === "leftSelect") { state.compareLeft = event.target.value; state.compareSection = null; renderCompare(); }

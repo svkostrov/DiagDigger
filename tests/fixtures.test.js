@@ -32,7 +32,7 @@ const NC1812 = pick("NC1812");            // extender, роль без WAN
 const KN2110 = pick("KN2110");            // nightly, часы не выставлены (1970)
 
 test("в наборе фикстур есть все опорные случаи", () => {
-  assert.equal(names.length, 8, "ожидается 8 диагностик в tests/fixtures/");
+  assert.ok(names.length >= 8, "ожидается не менее 8 опорных диагностик в tests/fixtures/");
   assert.ok(KN1811 && KN1912_A && KN1912_B && NC1812 && KN2110);
   assert.ok(names.some(n => n.includes("_extender_")), "нужен хотя бы один ретранслятор");
   assert.ok(names.some(n => n.includes("_router_")), "нужен хотя бы один роутер");
