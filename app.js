@@ -1,4 +1,4 @@
-import { CATEGORY_INFO, compareSections, compareSemantic, groupSections, lineDiff, parseDiagnostic, searchDiagnostic } from "./parser.js";
+import { CATEGORY_INFO, compareSections, compareSemantic, groupSections, lineDiff, parseDiagnostic, parseConntrack, searchDiagnostic } from "./parser.js";
 
 const state = { files: [], activeId: null, activeSection: null, activeCategory: "all", query: "", tab: "explore", compareLeft: null, compareRight: null, compareFilter: "all", compareSection: null, compareMode: "semantic" };
 const $ = selector => document.querySelector(selector);
@@ -13,6 +13,44 @@ const formatTimestamp = value => {
 };
 const wifiBandLabel = id => ({ WifiMaster0: "2.4 GHz", WifiMaster1: "5 GHz" })[id] || id;
 
+// Store screen references only: diagnostics stay in memory, never in browser history.
+const routeKeys = ["activeId", "activeSection", "activeCategory", "query", "tab", "compareLeft", "compareRight", "compareFilter", "compareSection", "compareMode"];
+const historySession = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+let restoringHistory = false;
+const routeSnapshot = () => Object.fromEntries(routeKeys.map(key => [key, state[key]]));
+let lastRoute = routeSnapshot();
+history.replaceState({ diagdigger: historySession, route: lastRoute }, "");
+function syncHistory() {
+  if (restoringHistory) return;
+  const route = routeSnapshot();
+  if (JSON.stringify(route) === JSON.stringify(lastRoute)) return;
+  const previous = history.state;
+  if (previous?.diagdigger === historySession) {
+    const active = document.activeElement;
+    const selector = active?.id ? `#${CSS.escape(active.id)}` : ["section-key", "search-section", "compare-key"].map(key => active?.hasAttribute?.(`data-${key}`) ? `[data-${key}="${CSS.escape(active.getAttribute(`data-${key}`))}"]` : null).find(Boolean);
+    history.replaceState({ ...previous, scroll: window.scrollY, focus: selector }, "");
+  }
+  const sameSearch = lastRoute.query && route.query && route.tab === "explore" && routeKeys.filter(key => key !== "query").every(key => lastRoute[key] === route[key]);
+  history[!lastRoute.activeId || sameSearch ? "replaceState" : "pushState"]({ diagdigger: historySession, route }, "");
+  lastRoute = route;
+}
+window.addEventListener("popstate", event => {
+  if (event.state?.diagdigger !== historySession) return;
+  clearTimeout(state.searchTimer);
+  restoringHistory = true;
+  Object.assign(state, event.state.route);
+  if (!state.files.some(file => file.id === state.activeId)) { state.activeId = state.files[0]?.id || null; state.activeSection = null; }
+  lastRoute = routeSnapshot();
+  render();
+  restoringHistory = false;
+  requestAnimationFrame(() => {
+    const target = (event.state.focus && document.querySelector(event.state.focus)) || document.querySelector(state.tab === "compare" ? "#compareView h2, #compareView h1" : ".section-detail h2, #exploreView h1");
+    if (target) { if (!target.matches("button,input,select,a")) target.tabIndex = -1; target.focus({ preventScroll: true }); }
+    window.scrollTo(0, event.state.scroll || 0);
+  });
+});
+
+const expandedCategories = new Set();
 const NAV_GROUP_ICONS = {
   status: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="none"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>`,
   internet: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.45 4 5.45 4 9s-1.4 6.55-4 9c-2.6-2.45-4-5.45-4-9s1.4-6.55 4-9z"/></svg>`,
@@ -97,6 +135,8 @@ async function loadFiles(fileList) {
 }
 
 function render() {
+  $("#exploreView").classList.toggle("hidden", state.tab !== "explore");
+  $("#compareView").classList.toggle("hidden", state.tab !== "compare");
   $("#emptyState").classList.toggle("hidden", state.files.length > 0);
   $("#workspace").classList.toggle("hidden", !state.files.length);
   $("#headerFilePicker").classList.toggle("hidden", !state.files.length);
@@ -157,6 +197,7 @@ function renderNavCategories(keys, sectionsByCategory) {
 }
 
 function renderExplore() {
+  syncHistory();
   const file = state.files.find(f => f.id === state.activeId) || state.files[0];
   if (!file) return;
   const allGroups = groupSections(file);
@@ -213,7 +254,7 @@ function renderSearchHit(hit, query) {
 
 function renderCategory(key, sections, query, expanded = false) {
   const info = CATEGORY_INFO[key];
-  const limit = expanded ? sections.length : query.trim() ? 30 : 7;
+  const limit = expanded || expandedCategories.has(key) ? sections.length : query.trim() ? 30 : 7;
   return `<article class="category-card">
     <div class="category-head"><span class="category-icon">${info.icon}</span><div><h2>${info.title}</h2><small>${sections.length} ${plural(sections.length, "секция", "секции", "секций")}</small></div></div>
     <div class="section-list">${sections.slice(0, limit).map(renderSectionButton).join("")}</div>
@@ -233,6 +274,7 @@ function renderBackButton() {
 }
 
 function renderSectionDetail(section) {
+  if (section.presentation === "conntrack") return renderConntrack(section);
   if (section.presentation === "associations") return renderAssociations(section);
   if (section.presentation === "json") return renderJsonSection(section);
   if (["devices", "neighbours", "traffic-hosts", "arp", "proxies", "xml-records"].includes(section.presentation)) return renderHumanXmlSection(section);
@@ -410,6 +452,55 @@ function renderHumanXmlSection(section) {
   return `<div class="section-detail human-xml-section"><div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>${escapeHtml(section.name)}</h2></div><button class="copy-button" id="copySection">Копировать</button></div><p class="association-summary">${label}. Данные представлены в удобном виде; исходный XML доступен ниже.</p><div class="association-grid record-grid">${cards.join("") || `<div class="empty-results">Не удалось выделить записи из этого XML.</div>`}</div><details class="json-raw human-xml-raw"><summary>Исходный XML</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный XML секции ${escapeHtml(section.name)}"><code>${highlight(section.content, state.query)}</code></pre></details></div>`;
 }
 
+function conntrackClients(file) {
+  const clients = new Map();
+  for (const section of file.sections.filter(section => ["devices", "arp", "neighbours"].includes(section.presentation))) {
+    const root = parseXmlFragment(section.content);
+    if (!root) continue;
+    for (const record of root.children) {
+      const value = key => { const result = directXmlValue(record, key); return result === "—" ? "" : result; };
+      const name = value("name") || value("hostname");
+      const addresses = [value("ip"), value("ip6"), value("address")];
+      const container = directXmlElement(record, "addresses");
+      if (container) addresses.push(...[...container.children].map(item => directXmlValue(item, "address")));
+      for (const ip of addresses.filter(ip => ip && !/[\s<>]/.test(ip))) {
+        if (!clients.has(ip) || !clients.get(ip).name) clients.set(ip, { name, mac: value("mac") });
+      }
+    }
+  }
+  return clients;
+}
+const conntrackTraffic = value => value === undefined ? "—" : Number(value) < 1024 ? `${value} Б` : formatTraffic(value);
+const conntrackEndpoint = (ip, port) => `${ip.includes(":") ? `[${ip}]` : ip}${port ? `:${port}` : ""}`;
+function renderConntrack(section) {
+  const file = state.files.find(file => file.id === state.activeId);
+  const { sessions, unparsed } = parseConntrack(section.content);
+  const clients = conntrackClients(file);
+  const groups = new Map();
+  for (const session of sessions) {
+    // A known destination after DNAT is a client too; do not label an external initiator as that client.
+    const ip = clients.has(session.original.src) ? session.original.src : clients.has(session.reply.src) ? session.reply.src : session.original.src;
+    if (!groups.has(ip)) groups.set(ip, []);
+    groups.get(ip).push(session);
+  }
+  const choices = [...groups].sort((a, b) => Number(clients.has(b[0])) - Number(clients.has(a[0])) || b[1].length - a[1].length);
+  return `<div class="section-detail conntrack-section"><div class="detail-toolbar">${renderBackButton()}<div><span>${CATEGORY_INFO[section.category].title}</span><h2>Сессии ${section.name.includes("ipv6") ? "IPv6" : "IPv4"} · conntrack</h2></div><button class="copy-button" id="copySection">Копировать</button></div>
+  <div class="json-view"><p class="association-summary">${sessions.length} сессий · ${groups.size} адресов. Снимок на момент диагностики. Инициатор → назначение; счётчики указаны в исходном и обратном направлениях.</p>
+  <label class="conntrack-filter">Клиент / инициатор<select id="conntrackClient"><option value="">Все адреса (${sessions.length})</option>${choices.map(([ip, rows]) => `<option value="${escapeHtml(ip)}">${escapeHtml(clients.get(ip)?.name ? `${clients.get(ip).name} · ${ip}` : ip)} — ${rows.length}</option>`).join("")}</select></label>
+  <div id="conntrackGroups">${choices.map(([ip, rows]) => {
+    const client = clients.get(ip);
+    const data = rows.map(({ original: o, reply: r, flags, tcpState, protocol }) => {
+      const nat = [];
+      if (o.src !== r.dst || o.sport !== r.dport) nat.push(`Источник → ${conntrackEndpoint(r.dst, r.dport)}`);
+      if (o.dst !== r.src || o.dport !== r.sport) nat.push(`Назначение → ${conntrackEndpoint(r.src, r.sport)}`);
+      return { protocol, initiator: conntrackEndpoint(o.src, o.sport), destination: conntrackEndpoint(o.dst, o.dport), state: [tcpState, flags.includes("UNREPLIED") ? "Без ответа" : flags.includes("ASSURED") ? "Подтверждена" : "Состояние не указано"].filter(Boolean).join(" · "), packets: `${o.packets ?? "—"} / ${r.packets ?? "—"}`, traffic: `${conntrackTraffic(o.bytes)} / ${conntrackTraffic(r.bytes)}`, nat: nat.join("\n") || "Нет" };
+    });
+    return `<div class="conntrack-client" data-client-ip="${escapeHtml(ip)}">${renderDataTable(`${client?.name || (client ? "Клиент" : ["127.0.0.1", "::1"].includes(ip) ? "Локальные сессии роутера" : "Инициатор (имя неизвестно)")} · ${ip}${client?.mac ? ` · ${client.mac}` : ""}`, data, [["protocol", "Протокол"], ["initiator", "Инициатор"], ["destination", "Назначение"], ["state", "Состояние"], ["packets", "Пакеты → / ←"], ["traffic", "Трафик → / ←"], ["nat", "NAT"]])}</div>`;
+  }).join("") || `<p class="empty-results">Сессий нет.</p>`}</div>
+  ${unparsed.length ? `<p class="json-summary">Не разобрано строк: ${unparsed.length}. Они доступны в исходном выводе.</p>` : ""}
+  <details class="json-raw"><summary>Исходный вывод conntrack</summary><pre class="code-view" tabindex="0" role="region" aria-label="Исходный conntrack"><code>${escapeHtml(section.content)}</code></pre></details></div></div>`;
+}
+
 function renderDataTable(title, rows, columns) {
   return `<section class="json-group json-collection"><div class="json-group-head"><h3>${escapeHtml(title)}</h3><span>${rows.length} ${plural(rows.length, "запись", "записи", "записей")}</span></div><div class="json-table-wrap" tabindex="0" role="region" aria-label="${escapeHtml(title)}"><table class="json-table"><thead><tr>${columns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(([key]) => `<td><code>${escapeHtml(row[key] ?? "—")}</code></td>`).join("")}</tr>`).join("")}</tbody></table></div></section>`;
 }
@@ -478,6 +569,8 @@ function highlight(text, query) {
 }
 
 function renderCompare() {
+  syncHistory();
+  updateDocumentTitle();
   if (state.files.length < 2) {
     $("#compareView").innerHTML = `<div class="compare-empty"><div>⇄</div><h1>Добавьте второй файл</h1><p>Для сравнения нужны две диагностики.</p><button class="button button-primary" id="compareUpload">Добавить файл</button></div>`;
     return;
@@ -563,6 +656,7 @@ function renderDiff(item, left, right) {
 }
 
 function showAllCategory(key) {
+  expandedCategories.add(key);
   const file = state.files.find(f => f.id === state.activeId); const groups = groupSections(file, state.query);
   const group = groups.find(([k]) => k === key); if (!group) return;
   const card = [...document.querySelectorAll(".category-card")].find(el => el.querySelector(`[data-category="${key}"]`));
@@ -628,6 +722,9 @@ document.addEventListener("input", event => {
 });
 
 document.addEventListener("change", event => {
+  if (event.target.id === "conntrackClient") {
+    document.querySelectorAll(".conntrack-client").forEach(group => { group.hidden = Boolean(event.target.value) && group.dataset.clientIp !== event.target.value; });
+  }
   if (event.target.id === "categoryJump") {
     state.activeCategory = event.target.value; state.activeSection = null; state.query = "";
     render(); focusHeading("#exploreView h1");

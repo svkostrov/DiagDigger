@@ -221,6 +221,8 @@ const SHOW_CATEGORY_OVERRIDES = new Map([
 ]);
 
 const SHOW_PRESENTATIONS = new Map([
+  ["show ip conntrack", "conntrack"],
+  ["show ipv6 conntrack", "conntrack"],
   ["show device-list", "devices"],
   ["show ip neighbour", "neighbours"],
   ["show ntce hosts", "traffic-hosts"],
@@ -719,4 +721,25 @@ export function lineDiff(left = "", right = "") {
   }
   out.push(...a.slice(a.length - suffix).map(text => ({ type: "same", text })));
   return out;
+}
+
+// Each line contains the original tuple followed by the reply tuple.
+export function parseConntrack(content) {
+  const sessions = [], unparsed = [];
+  const blocks = [...content.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)];
+  const text = blocks.length ? blocks.map(match => match[1]).join("\n") : content.replace(/<[^>]*>/g, "");
+  for (const raw of text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)) {
+    const start = raw.match(/^(\w+)\s+\d+\s+(.*?)\bsrc=/);
+    const tuples = [...raw.matchAll(/\bsrc=([^\s]+)\s+dst=([^\s]+)([\s\S]*?)(?=\bsrc=|$)/g)];
+    if (!start || tuples.length !== 2) { unparsed.push(raw); continue; }
+    const tuple = match => {
+      const fields = Object.fromEntries([...match[3].matchAll(/\b([a-z]+)=([^\s]+)/g)].map(m => [m[1], m[2]]));
+      return { ...fields, src: match[1].replace(/^\[|\]$/g, ""), dst: match[2].replace(/^\[|\]$/g, "") };
+    };
+    const original = tuple(tuples[0]), reply = tuple(tuples[1]);
+    const flags = [...raw.matchAll(/\[([A-Z_]+)\]/g)].map(match => match[1]);
+    const tcpState = start[2].trim().split(/\s+/).find(token => /^[A-Z_]+$/.test(token));
+    sessions.push({ protocol: start[1].toUpperCase(), original, reply, flags, tcpState: tcpState || "", raw });
+  }
+  return { sessions, unparsed };
 }

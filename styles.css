@@ -16,3 +16,5 @@ button:focus,button:focus-visible,a:focus-visible,input:focus-visible,select:foc
 .json-cell-details{min-width:0}.json-cell-details pre{width:100%;max-width:none}.json-table .json-cell-details pre{width:auto;max-width:420px}
 @media(min-width:1001px) and (max-width:1199px){.compare-head{align-items:flex-start;flex-direction:column}.compare-selects{width:100%;min-width:0}.compare-selects select{min-width:0;max-width:none;flex:1}}
 @media(max-width:420px){.search-wrap kbd{display:none}.search-wrap{grid-template-columns:24px minmax(0,1fr) auto}}
+
+.conntrack-filter{display:grid;gap:8px;font-size:12px;max-width:100%;min-width:0}.conntrack-filter select{width:100%;min-width:0;min-height:36px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px}.conntrack-client{min-width:0;margin-bottom:16px}.conntrack-client[hidden]{display:none}.conntrack-client .json-group-head h3{overflow-wrap:anywhere;min-width:0}.conntrack-client .json-group-head{flex-wrap:wrap}.conntrack-section .json-table-wrap{max-height:520px;min-height:24px}.conntrack-section .json-table td{font-size:12px}.conntrack-section .json-table th{font-size:11px}
